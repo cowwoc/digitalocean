@@ -4,7 +4,7 @@
 # <img src="docs/logo.svg" width=64 height=64 alt="logo"> DigitalOcean Java Client
 
 [![API](https://img.shields.io/badge/api_docs-5B45D5.svg)](https://cowwoc.github.io/digitalocean/0.1/docs/api/)
-[![Changelog](https://img.shields.io/badge/changelog-A345D5.svg)](docs/Changelog.md)
+[![Changelog](https://img.shields.io/badge/changelog-A345D5.svg)](docs/changelog.md)
 
 A Java client for the [DigitalOcean](https://www.digitalocean.com/) cloud platform.
 
@@ -19,7 +19,7 @@ To get started, add this Maven dependency:
 </dependency>
 ```
 
-## Usage Example
+## Example
 
 ```java
 import com.github.cowwoc.digitalocean.exception.PermissionDeniedException;
@@ -40,30 +40,30 @@ import java.util.concurrent.TimeoutException;
 
 public final class Example
 {
-	public static void main(String[] args)
-		throws PermissionDeniedException, IOException, TimeoutException, InterruptedException
-	{
-		Configuration configuration = Configuration.combine(
-			Configuration.fromPath(Paths.get("deployment.properties")),
-			Configuration.fromEnvironmentVariables());
-		String digitalOceanToken = configuration.getString("CLOUD_ACCESS_TOKEN");
+  public static void main(String[] args)
+    throws PermissionDeniedException, IOException, TimeoutException, InterruptedException
+  {
+    Configuration configuration = Configuration.combine(
+      Configuration.fromPath(Paths.get("deployment.properties")),
+      Configuration.fromEnvironmentVariables());
+    String digitalOceanToken = configuration.getString("CLOUD_ACCESS_TOKEN");
 
-		try (JvmScope jvm = new DefaultJvmScope(configuration);
-		     DigitalOceanScope scope = new MainDigitalOceanScope(jvm, digitalOceanToken))
-		{
-			DropletImage image = DropletImage.getBySlug(scope, "debian-12-x64");
-			DropletType type = DropletType.BASIC_1_VCPU_2GB_RAM_50GB_DISK;
-			Vpc vpc = Vpc.getDefault(scope, Zone.NYC3);
-			Droplet droplet = Droplet.builder(scope, "Node123", type, image, vpc).create();
-			while (droplet.getAddresses().isEmpty())
-				Thread.sleep(1000);
-			System.out.println("The droplet's address is: " + droplet.getAddresses().getFirst());
-		}
-	}
+    try (JvmScope jvm = new DefaultJvmScope(configuration);
+         DigitalOceanScope scope = new MainDigitalOceanScope(jvm, digitalOceanToken))
+    {
+      DropletImage image = DropletImage.getBySlug(scope, "debian-12-x64");
+      DropletType type = DropletType.BASIC_1_VCPU_2GB_RAM_50GB_DISK;
+      Vpc vpc = Vpc.getDefault(scope, Zone.NYC3);
+      Droplet droplet = Droplet.builder(scope, "Node123", type, image, vpc).create();
+      while (droplet.getAddresses().isEmpty())
+        Thread.sleep(1000);
+      System.out.println("The droplet's address is: " + droplet.getAddresses().getFirst());
+    }
+  }
 }
 ```
 
-## Entry Points
+## Getting Started
 
 See the [API documentation](https://cowwoc.github.io/digitalocean/0.1/docs/api/) for more details.
 
