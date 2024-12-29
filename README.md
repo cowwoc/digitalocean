@@ -14,7 +14,7 @@ To get started, add this Maven dependency:
 
 <dependency>
   <groupId>com.github.cowwoc.digitalocean</groupId>
-  <artifactId>java</artifactId>
+  <artifactId>digitalocean</artifactId>
   <version>0.1</version>
 </dependency>
 ```
