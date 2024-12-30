@@ -7,6 +7,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.github.cowwoc.digitalocean.internal.scope.HttpClientFactory;
 import com.github.cowwoc.digitalocean.internal.util.ClientRequests;
 import com.github.cowwoc.digitalocean.util.Configuration;
+import com.github.cowwoc.pouch.core.AbstractScope;
 import com.github.cowwoc.pouch.core.Scopes;
 import org.eclipse.jetty.client.HttpClient;
 

@@ -1,6 +1,7 @@
 package com.github.cowwoc.digitalocean.scope;
 
 import com.github.cowwoc.digitalocean.util.Configuration;
+import com.github.cowwoc.pouch.core.Scope;
 
 /**
  * Values specific to the lifetime of a JVM.

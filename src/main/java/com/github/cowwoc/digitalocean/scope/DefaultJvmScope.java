@@ -1,6 +1,7 @@
 package com.github.cowwoc.digitalocean.scope;
 
 import com.github.cowwoc.digitalocean.util.Configuration;
+import com.github.cowwoc.pouch.core.AbstractScope;
 
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicBoolean;

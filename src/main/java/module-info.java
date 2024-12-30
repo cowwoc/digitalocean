@@ -12,6 +12,7 @@ module com.github.cowwoc.digitalocean
 	requires org.bouncycastle.pkix;
 	requires org.threeten.extra;
 	requires com.fasterxml.jackson.datatype.jsr310;
+	requires com.fasterxml.jackson.databind;
 
 	exports com.github.cowwoc.digitalocean.exception;
 	exports com.github.cowwoc.digitalocean.resource;
