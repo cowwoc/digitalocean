@@ -9,8 +9,6 @@
     * [jackson](https://github.com/cowwoc/requirements.java/jackson/)
     * [java](https://github.com/cowwoc/requirements.java/java/)
     * [java-diff-utils](https://github.com/java-diff-utils/java-diff-utils/java-diff-utils)
-    * [Apache Log4j API](https://logging.apache.org/log4j/2.x/log4j/log4j-api/)
-    * [Apache Log4j to SLF4J Adapter](https://logging.apache.org/log4j/2.x/log4j/log4j-to-slf4j/)
     * [Apache Mina SSHD :: OSGi](https://www.apache.org/sshd/sshd-osgi/)
     * [JCL 1.2 implemented over SLF4J](http://www.slf4j.org)
   * Apache Software License - Version 2.0:
@@ -38,5 +36,4 @@
     * [Logback Classic Module](http://logback.qos.ch/logback-classic)
     * [Logback Core Module](http://logback.qos.ch/logback-core)
   * MIT License:
-    * [JUL to SLF4J bridge](http://www.slf4j.org)
     * [SLF4J API Module](http://www.slf4j.org)
