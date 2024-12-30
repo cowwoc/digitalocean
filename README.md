@@ -1,5 +1,5 @@
-[![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.github.cowwoc.digitalocean/java/badge.svg)](https://search.maven.org/search?q=g:com.github.cowwoc.digitalocean)
-[![build-status](../../workflows/build/badge.svg)](../../actions?query=workflow%3Abuild)
+[![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.github.cowwoc.digitalocean/digitalocean/badge.svg)](https://search.maven.org/search?q=g:com.github.cowwoc.digitalocean)
+[![build-status](../../workflows/Build/badge.svg)](../../actions?query=workflow%3Abuild)
 
 # <img src="docs/logo.svg" width=64 height=64 alt="logo"> DigitalOcean Java Client
 
