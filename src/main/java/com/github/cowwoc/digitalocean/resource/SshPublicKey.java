@@ -75,7 +75,7 @@ public final class SshPublicKey
 	}
 
 	/**
-	 * Lists all SSH keys.
+	 * Returns all SSH keys.
 	 *
 	 * @param client the client configuration
 	 * @return the list of all SSH keys
@@ -88,7 +88,7 @@ public final class SshPublicKey
 	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
 	 *                               due to shutdown signals.
 	 */
-	public static List<SshPublicKey> list(DigitalOceanClient client)
+	public static List<SshPublicKey> getAll(DigitalOceanClient client)
 		throws IOException, TimeoutException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/sshKeys_list

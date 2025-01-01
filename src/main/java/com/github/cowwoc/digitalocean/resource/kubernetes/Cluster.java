@@ -89,7 +89,7 @@ public final class Cluster
 	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
 	 *                               due to shutdown signals.
 	 */
-	public static List<Cluster> get(DigitalOceanClient client, Zone zone)
+	public static List<Cluster> getByZone(DigitalOceanClient client, Zone zone)
 		throws IOException, TimeoutException, InterruptedException
 	{
 		requireThat(zone, "zone").isNotNull();

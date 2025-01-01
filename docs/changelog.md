@@ -2,6 +2,11 @@ Minor updates involving cosmetic changes have been omitted from this list.
 
 See https://github.com/cowwoc/digitalocean/commits/main for a full list.
 
+## Version 0.6 - 2025/01/01
+
+* Renamed `Cluster.get()` to `Cluster.getByZone()`.
+* Renamed `SshPublicKey.list()` to `SshPublicKey.getAll()`.
+
 ## Version 0.3 - 2025/01/01
 
 * Renamed `DigitalOceanScope` to `DigitalOceanClient`.
