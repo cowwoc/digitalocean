@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.github.cowwoc.digitalocean</groupId>
 	<artifactId>digitalocean</artifactId>
@@ -52,7 +53,7 @@
 		<pmd.version>7.9.0</pmd.version>
 		<maven.checkstyle.version>3.6.0</maven.checkstyle.version>
 		<checkstyle.failOnViolation>true</checkstyle.failOnViolation>
-		<requirements.version>10.4</requirements.version>
+		<requirements.version>10.5</requirements.version>
 	</properties>
 
 	<dependencies>
