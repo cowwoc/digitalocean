@@ -1,9 +1,9 @@
 package com.github.cowwoc.digitalocean.resource;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.github.cowwoc.digitalocean.client.DigitalOceanClient;
 import com.github.cowwoc.digitalocean.internal.util.ClientRequests;
 import com.github.cowwoc.digitalocean.internal.util.DigitalOceans;
-import com.github.cowwoc.digitalocean.scope.DigitalOceanScope;
 import org.eclipse.jetty.client.ContentResponse;
 import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.HttpResponseException;
@@ -27,13 +27,14 @@ import static org.eclipse.jetty.http.HttpStatus.UNAUTHORIZED_401;
 public final class DockerImage
 {
 	/**
-	 * @param scope      the client configuration
+	 * @param client     the client configuration
 	 * @param repository the enclosing docker repository
 	 * @param json       the JSON representation of the image
 	 * @return the image
-	 * @throws NullPointerException if any of the arguments are null
+	 * @throws NullPointerException  if any of the arguments are null
+	 * @throws IllegalStateException if the client is closed
 	 */
-	static DockerImage getByJson(DigitalOceanScope scope, DockerRepository repository, JsonNode json)
+	static DockerImage getByJson(DigitalOceanClient client, DockerRepository repository, JsonNode json)
 	{
 		String digest = json.get("digest").textValue();
 		Set<String> tags = new HashSet<>();
@@ -46,10 +47,10 @@ public final class DockerImage
 			String layerDigest = node.get("digest").textValue();
 			layers.add(new Layer(layerDigest));
 		}
-		return new DockerImage(scope, repository, digest, tags, layers);
+		return new DockerImage(client, repository, digest, tags, layers);
 	}
 
-	private final DigitalOceanScope scope;
+	private final DigitalOceanClient client;
 	private final DockerRepository repository;
 	private final String digest;
 	private final Set<String> tags;
@@ -58,7 +59,7 @@ public final class DockerImage
 	/**
 	 * Creates a snapshot of the docker image's state.
 	 *
-	 * @param scope      the client configuration
+	 * @param client     the client configuration
 	 * @param repository the enclosing docker repository
 	 * @param digest     a value that uniquely identifies the image
 	 * @param tags       the tags that are associated with the image
@@ -66,15 +67,15 @@ public final class DockerImage
 	 * @throws NullPointerException     if any of the arguments are null
 	 * @throws IllegalArgumentException if {@code name} contains leading or trailing whitespace or is empty
 	 */
-	public DockerImage(DigitalOceanScope scope, DockerRepository repository, String digest, Set<String> tags,
+	public DockerImage(DigitalOceanClient client, DockerRepository repository, String digest, Set<String> tags,
 		Set<Layer> layers)
 	{
-		requireThat(scope, "scope").isNotNull();
+		requireThat(client, "client").isNotNull();
 		requireThat(repository, "repository").isNotNull();
 		requireThat(digest, "digest").isStripped().isNotEmpty();
 		requireThat(tags, "tags").isNotNull();
 		requireThat(layers, "layers").isNotNull();
-		this.scope = scope;
+		this.client = client;
 		this.repository = repository;
 		this.digest = digest;
 		this.tags = Set.copyOf(tags);
@@ -115,27 +116,28 @@ public final class DockerImage
 	 * Destroys the image.
 	 *
 	 * @param repository the image repository to remove the image from
-	 * @throws NullPointerException if {@code repository} is null
-	 * @throws IOException          if an I/O error occurs. These errors are typically transient, and retrying
-	 *                              the request may resolve the issue.
-	 * @throws TimeoutException     if the request times out before receiving a response. This might indicate
-	 *                              network latency or server overload.
-	 * @throws InterruptedException if the thread is interrupted while waiting for a response. This can happen
-	 *                              due to shutdown signals.
+	 * @throws NullPointerException  if {@code repository} is null
+	 * @throws IllegalStateException if the client is closed
+	 * @throws IOException           if an I/O error occurs. These errors are typically transient, and retrying
+	 *                               the request may resolve the issue.
+	 * @throws TimeoutException      if the request times out before receiving a response. This might indicate
+	 *                               network latency or server overload.
+	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
+	 *                               due to shutdown signals.
 	 */
 	public void destroy(DockerRepository repository) throws IOException, TimeoutException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/registry_delete_repositoryManifest
 		@SuppressWarnings("PMD.CloseResource")
-		HttpClient client = scope.getHttpClient();
-		ClientRequests clientRequests = scope.getClientRequests();
+		HttpClient httpClient = client.getHttpClient();
+		ClientRequests clientRequests = client.getClientRequests();
 		DockerRegistry registry = repository.getRegistry();
 		String uri = DigitalOceans.REST_SERVER + "/v2/registry/" + registry.getName() + "/repositories/" +
 			repository.getName() + "/digests/" + digest;
-		Request request = client.newRequest(uri).
+		Request request = httpClient.newRequest(uri).
 			method(DELETE).
 			headers(headers -> headers.put("Content-Type", "application/json").
-				put("Authorization", "Bearer " + scope.getDigitalOceanToken()));
+				put("Authorization", "Bearer " + client.getAccessToken()));
 		ContentResponse serverResponse = clientRequests.send(request);
 		switch (serverResponse.getStatus())
 		{
@@ -145,14 +147,14 @@ public final class DockerImage
 			}
 			case UNAUTHORIZED_401 ->
 			{
-				JsonNode json = DigitalOceans.getResponseBody(scope, serverResponse);
+				JsonNode json = DigitalOceans.getResponseBody(client, serverResponse);
 				throw new HttpResponseException(json.get("message").textValue(), serverResponse);
 			}
 			case PRECONDITION_FAILED_412 ->
 			{
 				// Example: "manifest is referenced by one or more other manifests" or
 				// "delete operations are not available while garbage collection is running"
-				JsonNode json = DigitalOceans.getResponseBody(scope, serverResponse);
+				JsonNode json = DigitalOceans.getResponseBody(client, serverResponse);
 				throw new IllegalArgumentException(json.get("message").textValue());
 			}
 			default -> throw new AssertionError(

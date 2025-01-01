@@ -4,7 +4,6 @@ import org.eclipse.jetty.client.BytesRequestContent;
 import org.eclipse.jetty.client.ContentResponse;
 import org.eclipse.jetty.client.Request;
 import org.eclipse.jetty.client.Request.Content;
-import org.eclipse.jetty.client.Response;
 import org.eclipse.jetty.http.HttpField;
 import org.eclipse.jetty.http.HttpFields;
 import org.eclipse.jetty.http.HttpStatus;
@@ -149,26 +148,6 @@ public final class ClientRequests
 				throw ioe;
 			throw new AssertionError(toString(request), e);
 		}
-	}
-
-	/**
-	 * Sends a request with an asynchronous response listener.
-	 *
-	 * @param request  the client request
-	 * @param listener the server response listener
-	 * @throws IOException          if an I/O error occurs. These errors are typically transient, and retrying
-	 *                              the request may resolve the issue.
-	 * @throws TimeoutException     if the request times out before receiving a response. This might indicate
-	 *                              network latency or server overload.
-	 * @throws InterruptedException if the thread is interrupted while waiting for a response. This can happen
-	 *                              due to shutdown signals.
-	 */
-	public void send(Request request, Response.Listener listener)
-		throws IOException, TimeoutException, InterruptedException
-	{
-		if (RUN_MODE == RunMode.DEBUG)
-			convertToRewindableContent(request);
-		request.send(listener);
 	}
 
 	/**

@@ -1,9 +1,9 @@
 package com.github.cowwoc.digitalocean.resource;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.github.cowwoc.digitalocean.client.DigitalOceanClient;
 import com.github.cowwoc.digitalocean.internal.util.DigitalOceans;
 import com.github.cowwoc.digitalocean.internal.util.ToStringBuilder;
-import com.github.cowwoc.digitalocean.scope.DigitalOceanScope;
-import com.fasterxml.jackson.databind.JsonNode;
 
 import java.io.IOException;
 import java.util.Map;
@@ -20,25 +20,26 @@ public final class Vpc
 	/**
 	 * Looks up the default VPC of a zone.
 	 *
-	 * @param scope the client configuration
-	 * @param zone  the zone
+	 * @param client the client configuration
+	 * @param zone   the zone
 	 * @return null if no match is found
-	 * @throws NullPointerException if any of the arguments are null
-	 * @throws IOException          if an I/O error occurs. These errors are typically transient, and retrying
-	 *                              the request may resolve the issue.
-	 * @throws TimeoutException     if the request times out before receiving a response. This might indicate
-	 *                              network latency or server overload.
-	 * @throws InterruptedException if the thread is interrupted while waiting for a response. This can happen
-	 *                              due to shutdown signals.
+	 * @throws NullPointerException  if any of the arguments are null
+	 * @throws IllegalStateException if the client is closed
+	 * @throws IOException           if an I/O error occurs. These errors are typically transient, and retrying
+	 *                               the request may resolve the issue.
+	 * @throws TimeoutException      if the request times out before receiving a response. This might indicate
+	 *                               network latency or server overload.
+	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
+	 *                               due to shutdown signals.
 	 */
-	public static Vpc getDefault(DigitalOceanScope scope, Zone zone)
+	public static Vpc getDefault(DigitalOceanClient client, Zone zone)
 		throws IOException, TimeoutException, InterruptedException
 	{
 		requireThat(zone, "zone").isNotNull();
 
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/vpcs_list
 		String uri = REST_SERVER + "/v2/vpcs";
-		return DigitalOceans.getElement(scope, uri, Map.of(), body ->
+		return DigitalOceans.getElement(client, uri, Map.of(), body ->
 		{
 			// https://docs.digitalocean.com/reference/api/intro/#links--pagination
 			for (JsonNode vpc : body.get("vpcs"))
@@ -58,12 +59,12 @@ public final class Vpc
 	/**
 	 * Looks up a VPC by its id.
 	 *
-	 * @param scope the client configuration
-	 * @param id    the ID of the VPC
+	 * @param client the client configuration
+	 * @param id     the ID of the VPC
 	 * @return null if no match is found
 	 * @throws NullPointerException     if any of the arguments are null
-	 * @throws IllegalArgumentException if any of the arguments contain leading or trailing whitespace or are
-	 *                                  empty
+	 * @throws IllegalArgumentException if {@code id} contains leading or trailing whitespace or is empty
+	 * @throws IllegalStateException    if the client is closed
 	 * @throws IOException              if an I/O error occurs. These errors are typically transient, and
 	 *                                  retrying the request may resolve the issue.
 	 * @throws TimeoutException         if the request times out before receiving a response. This might
@@ -71,14 +72,14 @@ public final class Vpc
 	 * @throws InterruptedException     if the thread is interrupted while waiting for a response. This can
 	 *                                  happen due to shutdown signals.
 	 */
-	public static Vpc getById(DigitalOceanScope scope, String id)
+	public static Vpc getById(DigitalOceanClient client, String id)
 		throws IOException, TimeoutException, InterruptedException
 	{
 		requireThat(id, "id").isStripped().isNotEmpty();
 
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/vpcs_get
 		String uri = REST_SERVER + "/v2/vpcs/" + id;
-		return DigitalOceans.getElement(scope, uri, Map.of(), body ->
+		return DigitalOceans.getElement(client, uri, Map.of(), body ->
 		{
 			JsonNode vpc = body.get("vpc");
 			return getByJson(vpc);

@@ -1,9 +1,9 @@
 package com.github.cowwoc.digitalocean.resource;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.github.cowwoc.digitalocean.client.DigitalOceanClient;
 import com.github.cowwoc.digitalocean.internal.util.DigitalOceans;
 import com.github.cowwoc.digitalocean.resource.DockerImage.Layer;
-import com.github.cowwoc.digitalocean.scope.DigitalOceanScope;
-import com.fasterxml.jackson.databind.JsonNode;
 
 import java.io.IOException;
 import java.util.ArrayDeque;
@@ -24,37 +24,37 @@ import static com.github.cowwoc.requirements10.java.DefaultJavaValidators.requir
 public final class DockerRepository
 {
 	/**
-	 * @param scope    the client configuration
+	 * @param client   the client configuration
 	 * @param registry the enclosing registry
 	 * @param json     the JSON representation of the repository
 	 * @return the repository
 	 * @throws NullPointerException if any of the arguments are null
 	 */
-	static DockerRepository getByJson(DigitalOceanScope scope, DockerRegistry registry, JsonNode json)
+	static DockerRepository getByJson(DigitalOceanClient client, DockerRegistry registry, JsonNode json)
 	{
 		String name = json.get("name").textValue();
-		return new DockerRepository(scope, registry, name);
+		return new DockerRepository(client, registry, name);
 	}
 
-	private final DigitalOceanScope scope;
+	private final DigitalOceanClient client;
 	private final DockerRegistry registry;
 	private final String name;
 
 	/**
 	 * Creates a snapshot of a container repository's state.
 	 *
-	 * @param scope    the client configuration
+	 * @param client   the client configuration
 	 * @param name     the name of the repository
 	 * @param registry the enclosing registry
 	 * @throws NullPointerException     if any of the arguments are null
 	 * @throws IllegalArgumentException if {@code name} contains leading or trailing whitespace or is empty
 	 */
-	private DockerRepository(DigitalOceanScope scope, DockerRegistry registry, String name)
+	private DockerRepository(DigitalOceanClient client, DockerRegistry registry, String name)
 	{
-		requireThat(scope, "scope").isNotNull();
+		requireThat(client, "client").isNotNull();
 		requireThat(registry, "registry").isNotNull();
 		requireThat(name, "name").isStripped().isNotEmpty();
-		this.scope = scope;
+		this.client = client;
 		this.registry = registry;
 		this.name = name;
 	}
@@ -63,22 +63,23 @@ public final class DockerRepository
 	 * Returns the images in the repository.
 	 *
 	 * @return the images
-	 * @throws IOException          if an I/O error occurs. These errors are typically transient, and retrying
-	 *                              the request may resolve the issue.
-	 * @throws TimeoutException     if the request times out before receiving a response. This might indicate
-	 *                              network latency or server overload.
-	 * @throws InterruptedException if the thread is interrupted while waiting for a response. This can happen
-	 *                              due to shutdown signals.
+	 * @throws IllegalStateException if the client is closed
+	 * @throws IOException           if an I/O error occurs. These errors are typically transient, and retrying
+	 *                               the request may resolve the issue.
+	 * @throws TimeoutException      if the request times out before receiving a response. This might indicate
+	 *                               network latency or server overload.
+	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
+	 *                               due to shutdown signals.
 	 */
 	public List<DockerImage> getImages() throws IOException, TimeoutException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/registry_list_repositoryManifests
 		String uri = REST_SERVER + "/v2/registry/" + registry.getName() + "/repositories/" + name + "/digests";
-		return DigitalOceans.getElements(scope, uri, Map.of(), body ->
+		return DigitalOceans.getElements(client, uri, Map.of(), body ->
 		{
 			List<DockerImage> images = new ArrayList<>();
 			for (JsonNode manifest : body.get("manifests"))
-				images.add(DockerImage.getByJson(scope, this, manifest));
+				images.add(DockerImage.getByJson(client, this, manifest));
 			return images;
 		});
 	}
@@ -165,19 +166,26 @@ public final class DockerRepository
 	 *
 	 * @param tags the image's tags
 	 * @return null if no match was found
-	 * @throws IOException          if an I/O error occurs. These errors are typically transient, and retrying
-	 *                              the request may resolve the issue.
-	 * @throws TimeoutException     if the request times out before receiving a response. This might indicate
-	 *                              network latency or server overload.
-	 * @throws InterruptedException if the thread is interrupted while waiting for a response. This can happen
-	 *                              due to shutdown signals.
+	 * @throws NullPointerException     if {@code tags} is null
+	 * @throws IllegalArgumentException if any of the tags contain leading or trailing whitespace or are empty
+	 * @throws IllegalStateException    if the client is closed
+	 * @throws IOException              if an I/O error occurs. These errors are typically transient, and
+	 *                                  retrying the request may resolve the issue.
+	 * @throws TimeoutException         if the request times out before receiving a response. This might
+	 *                                  indicate network latency or server overload.
+	 * @throws InterruptedException     if the thread is interrupted while waiting for a response. This can
+	 *                                  happen due to shutdown signals.
 	 */
 	public DockerImage getImageByTags(Set<String> tags)
 		throws IOException, TimeoutException, InterruptedException
 	{
+		requireThat(tags, "tags").isNotNull();
+		for (String tag : tags)
+			requireThat(tag, "tag").withContext(tags, "tags").isStripped().isNotEmpty();
+
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/registry_list_repositoryManifests
 		String uri = REST_SERVER + "/v2/registry/" + registry.getName() + "/repositories/" + name + "/digests";
-		return DigitalOceans.getElement(scope, uri, Map.of(), body ->
+		return DigitalOceans.getElement(client, uri, Map.of(), body ->
 		{
 			for (JsonNode manifest : body.get("manifests"))
 			{
@@ -185,7 +193,7 @@ public final class DockerRepository
 				for (JsonNode tag : manifest.get("tags"))
 					actualTags.add(tag.textValue());
 				if (actualTags.equals(tags))
-					return DockerImage.getByJson(scope, this, manifest);
+					return DockerImage.getByJson(client, this, manifest);
 			}
 			return null;
 		});

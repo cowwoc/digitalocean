@@ -16,6 +16,7 @@ module com.github.cowwoc.digitalocean
 
 	exports com.github.cowwoc.digitalocean.exception;
 	exports com.github.cowwoc.digitalocean.resource;
-	exports com.github.cowwoc.digitalocean.scope;
+	exports com.github.cowwoc.digitalocean.client;
 	exports com.github.cowwoc.digitalocean.util;
+	exports com.github.cowwoc.digitalocean.resource.kubernetes;
 }

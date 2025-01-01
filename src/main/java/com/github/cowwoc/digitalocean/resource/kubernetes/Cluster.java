@@ -1,17 +1,20 @@
-package com.github.cowwoc.digitalocean.resource;
+package com.github.cowwoc.digitalocean.resource.kubernetes;
 
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.github.cowwoc.digitalocean.client.DigitalOceanClient;
 import com.github.cowwoc.digitalocean.exception.KubernetesClusterNotFoundException;
 import com.github.cowwoc.digitalocean.internal.util.ClientRequests;
 import com.github.cowwoc.digitalocean.internal.util.DigitalOceans;
 import com.github.cowwoc.digitalocean.internal.util.RetryDelay;
 import com.github.cowwoc.digitalocean.internal.util.TimeLimit;
 import com.github.cowwoc.digitalocean.internal.util.ToStringBuilder;
-import com.github.cowwoc.digitalocean.scope.DigitalOceanScope;
+import com.github.cowwoc.digitalocean.resource.DropletType;
+import com.github.cowwoc.digitalocean.resource.Vpc;
+import com.github.cowwoc.digitalocean.resource.Zone;
 import org.eclipse.jetty.client.ContentResponse;
 import org.eclipse.jetty.client.Request;
 import org.slf4j.Logger;
@@ -48,60 +51,61 @@ import static org.eclipse.jetty.http.HttpStatus.OK_200;
 /**
  * A Kubernetes cluster.
  */
-public final class KubernetesCluster
+public final class Cluster
 {
 	static final DateTimeFormatter HOUR_MINUTE = DateTimeFormatter.ofPattern("H:mm");
 
 	/**
-	 * Creates a new cluster specification.
+	 * Creates a new cluster configuration.
 	 *
-	 * @param scope     the client configuration
+	 * @param client    the client configuration
 	 * @param name      the name of the node pool
 	 * @param zone      the zone that the droplet is deployed in
 	 * @param version   the software version of Kubernetes
 	 * @param nodePools the node pools that are deployed in the cluster
-	 * @return a specification
+	 * @return the configuration
 	 * @throws NullPointerException     if any of the arguments are null
 	 * @throws IllegalArgumentException if any of the arguments contain leading or trailing whitespace or are
 	 *                                  empty
 	 */
-	public static KubernetesClusterSpecification specification(DigitalOceanScope scope, String name, Zone zone,
-		KubernetesVersion version, List<NodePoolSpecification> nodePools)
+	public static ClusterConfiguration configuration(DigitalOceanClient client, String name,
+		Zone zone, KubernetesVersion version, List<NodePoolConfiguration> nodePools)
 	{
-		return new KubernetesClusterSpecification(scope, name, zone, version, nodePools);
+		return new ClusterConfiguration(client, name, zone, version, nodePools);
 	}
 
 	/**
 	 * Returns the clusters that are deployed in a zone.
 	 *
-	 * @param scope the client configuration
-	 * @param zone  the zone
+	 * @param client the client configuration
+	 * @param zone   the zone
 	 * @return the clusters
-	 * @throws NullPointerException if any of the arguments are null
-	 * @throws IOException          if an I/O error occurs. These errors are typically transient, and retrying
-	 *                              the request may resolve the issue.
-	 * @throws TimeoutException     if the request times out before receiving a response. This might indicate
-	 *                              network latency or server overload.
-	 * @throws InterruptedException if the thread is interrupted while waiting for a response. This can happen
-	 *                              due to shutdown signals.
+	 * @throws NullPointerException  if any of the arguments are null
+	 * @throws IllegalStateException if the client is closed
+	 * @throws IOException           if an I/O error occurs. These errors are typically transient, and retrying
+	 *                               the request may resolve the issue.
+	 * @throws TimeoutException      if the request times out before receiving a response. This might indicate
+	 *                               network latency or server overload.
+	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
+	 *                               due to shutdown signals.
 	 */
-	public static List<KubernetesCluster> list(DigitalOceanScope scope, Zone zone)
+	public static List<Cluster> get(DigitalOceanClient client, Zone zone)
 		throws IOException, TimeoutException, InterruptedException
 	{
 		requireThat(zone, "zone").isNotNull();
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/kubernetes_list_clusters
 		String uri = REST_SERVER + "/v2/kubernetes/clusters";
-		return DigitalOceans.getElements(scope, uri, Map.of(), body ->
+		return DigitalOceans.getElements(client, uri, Map.of(), body ->
 		{
 			JsonNode clusterNodes = body.get("kubernetes_clusters");
 			if (clusterNodes == null)
 				throw new JsonMappingException(null, "kubernetes_clusters must be set");
-			List<KubernetesCluster> matches = new ArrayList<>();
+			List<Cluster> matches = new ArrayList<>();
 			for (JsonNode cluster : clusterNodes)
 			{
 				Zone actualZone = Zone.getBySlug(cluster.get("region").textValue());
 				if (actualZone.equals(zone))
-					matches.add(getByJson(scope, cluster));
+					matches.add(getByJson(client, cluster));
 			}
 			return matches;
 		});
@@ -110,11 +114,12 @@ public final class KubernetesCluster
 	/**
 	 * Looks up a cluster by its name.
 	 *
-	 * @param scope the client configuration
-	 * @param name  the name
+	 * @param client the client configuration
+	 * @param name   the name
 	 * @return null if no match is found
 	 * @throws NullPointerException     if any of the arguments are null
 	 * @throws IllegalArgumentException if {@code name} contains leading or trailing whitespace or is empty
+	 * @throws IllegalStateException    if the client is closed
 	 * @throws IOException              if an I/O error occurs. These errors are typically transient, and
 	 *                                  retrying the request may resolve the issue.
 	 * @throws TimeoutException         if the request times out before receiving a response. This might
@@ -122,12 +127,12 @@ public final class KubernetesCluster
 	 * @throws InterruptedException     if the thread is interrupted while waiting for a response. This can
 	 *                                  happen due to shutdown signals.
 	 */
-	public static KubernetesCluster getByName(DigitalOceanScope scope, String name)
+	public static Cluster getByName(DigitalOceanClient client, String name)
 		throws IOException, TimeoutException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/kubernetes_list_clusters
 		String uri = REST_SERVER + "/v2/kubernetes/clusters";
-		return DigitalOceans.getElement(scope, uri, Map.of(), body ->
+		return DigitalOceans.getElement(client, uri, Map.of(), body ->
 		{
 			JsonNode clusterNodes = body.get("kubernetes_clusters");
 			if (clusterNodes == null)
@@ -136,25 +141,26 @@ public final class KubernetesCluster
 			{
 				String actualName = cluster.get("name").textValue();
 				if (actualName.equals(name))
-					return getByJson(scope, cluster);
+					return getByJson(client, cluster);
 			}
 			return null;
 		});
 	}
 
 	/**
-	 * @param scope the client configuration
-	 * @param json  the JSON representation of the cluster
+	 * @param client the client configuration
+	 * @param json   the JSON representation of the cluster
 	 * @return the cluster
-	 * @throws NullPointerException if any of the arguments are null
-	 * @throws IOException          if an I/O error occurs. These errors are typically transient, and retrying
-	 *                              the request may resolve the issue.
-	 * @throws TimeoutException     if the request times out before receiving a response. This might indicate
-	 *                              network latency or server overload.
-	 * @throws InterruptedException if the thread is interrupted while waiting for a response. This can happen
-	 *                              due to shutdown signals.
+	 * @throws NullPointerException  if any of the arguments are null
+	 * @throws IllegalStateException if the client is closed
+	 * @throws IOException           if an I/O error occurs. These errors are typically transient, and retrying
+	 *                               the request may resolve the issue.
+	 * @throws TimeoutException      if the request times out before receiving a response. This might indicate
+	 *                               network latency or server overload.
+	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
+	 *                               due to shutdown signals.
 	 */
-	static KubernetesCluster getByJson(DigitalOceanScope scope, JsonNode json)
+	static Cluster getByJson(DigitalOceanClient client, JsonNode json)
 		throws IOException, InterruptedException, TimeoutException
 	{
 		String id = json.get("id").textValue();
@@ -163,7 +169,7 @@ public final class KubernetesCluster
 		KubernetesVersion version = KubernetesVersion.getBySlug(json.get("version").textValue());
 		String clusterSubnet = json.get("cluster_subnet").textValue();
 		String serviceSubnet = json.get("service_subnet").textValue();
-		Vpc vpc = Vpc.getById(scope, json.get("vpc_uuid").textValue());
+		Vpc vpc = Vpc.getById(client, json.get("vpc_uuid").textValue());
 		String ipv4;
 		JsonNode ipv4Node = json.get("ipv4");
 		if (ipv4Node == null)
@@ -180,9 +186,9 @@ public final class KubernetesCluster
 		JsonNode nodePoolsNode = json.get("node_pools");
 		List<NodePool> nodePools = new ArrayList<>();
 		for (JsonNode node : nodePoolsNode)
-			nodePools.add(NodePool.getByJson(scope, node));
+			nodePools.add(NodePool.getByJson(client, node));
 
-		MaintenanceWindow maintenanceWindow = MaintenanceWindow.getByJson(scope, json.get("maintenance_policy"));
+		MaintenanceWindow maintenanceWindow = MaintenanceWindow.getByJson(client, json.get("maintenance_policy"));
 		boolean autoUpgrade = DigitalOceans.toBoolean(json, "auto_upgrade");
 		Status status = Status.getByJson(json.get("status"));
 
@@ -191,12 +197,12 @@ public final class KubernetesCluster
 		boolean surgeUpgrade = DigitalOceans.toBoolean(json, "surge_upgrade");
 		boolean ha = DigitalOceans.toBoolean(json, "ha");
 		boolean registryEnabled = DigitalOceans.toBoolean(json, "registry_enabled");
-		return new KubernetesCluster(scope, id, name, zone, version, clusterSubnet, serviceSubnet, vpc, ipv4,
+		return new Cluster(client, id, name, zone, version, clusterSubnet, serviceSubnet, vpc, ipv4,
 			endpoint, tags, nodePools, maintenanceWindow, autoUpgrade, status, surgeUpgrade, ha, registryEnabled,
 			createdAt, updatedAt);
 	}
 
-	private final DigitalOceanScope scope;
+	private final DigitalOceanClient client;
 	private final String id;
 	private final String name;
 	private final Zone zone;
@@ -216,12 +222,12 @@ public final class KubernetesCluster
 	private final boolean registryEnabled;
 	private final Instant createdAt;
 	private final Instant updatedAt;
-	private final Logger log = LoggerFactory.getLogger(KubernetesCluster.class);
+	private final Logger log = LoggerFactory.getLogger(Cluster.class);
 
 	/**
 	 * Creates a new Kubernetes cluster.
 	 *
-	 * @param scope             the client configuration
+	 * @param client            the client configuration
 	 * @param id                the ID of the cluster
 	 * @param name              the name of the cluster
 	 * @param zone              the zone that the droplet is deployed in
@@ -254,15 +260,15 @@ public final class KubernetesCluster
 	 *                                    <li>any of the arguments contain leading or trailing whitespace</li>
 	 *                                    <li>any of the mandatory arguments are empty</li>
 	 *                                  </ul>
-	 * @see Vpc#getDefault(DigitalOceanScope, Zone)
+	 * @see Vpc#getDefault(DigitalOceanClient, Zone)
 	 */
-	private KubernetesCluster(DigitalOceanScope scope, String id, String name, Zone zone,
+	private Cluster(DigitalOceanClient client, String id, String name, Zone zone,
 		KubernetesVersion version, String clusterSubnet, String serviceSubnet, Vpc vpc, String ipv4,
 		String endpoint, Set<String> tags, List<NodePool> nodePools, MaintenanceWindow maintenanceWindow,
 		boolean autoUpgrade, Status status, boolean surgeUpgrade, boolean highAvailability,
 		boolean registryEnabled, Instant createdAt, Instant updatedAt)
 	{
-		requireThat(scope, "scope").isNotNull();
+		requireThat(client, "client").isNotNull();
 		requireThat(id, "id").isStripped().isNotEmpty();
 		requireThat(name, "name").isStripped().isNotEmpty();
 		requireThat(zone, "zone").isNotNull();
@@ -278,7 +284,7 @@ public final class KubernetesCluster
 		requireThat(status, "status").isNotNull();
 		requireThat(createdAt, "createdAt").isNotNull();
 		requireThat(updatedAt, "updatedAt").isNotNull();
-		this.scope = scope;
+		this.client = client;
 		this.id = id;
 		this.name = name;
 		this.zone = zone;
@@ -495,7 +501,7 @@ public final class KubernetesCluster
 	@Override
 	public String toString()
 	{
-		return new ToStringBuilder(KubernetesCluster.class).
+		return new ToStringBuilder(Cluster.class).
 			add("id", id).
 			add("name", name).
 			add("zone", zone).
@@ -519,12 +525,13 @@ public final class KubernetesCluster
 	}
 
 	/**
-	 * Updates the cluster to the desired specification.
+	 * Updates the cluster to the desired configuration.
 	 *
 	 * @param target the desired state
 	 * @throws NullPointerException               if {@code target} is null
 	 * @throws IllegalArgumentException           if the server does not support applying any of the desired
 	 *                                            changes
+	 * @throws IllegalStateException              if the client is closed
 	 * @throws IOException                        if an I/O error occurs. These errors are typically transient,
 	 *                                            and retrying the request may resolve the issue.
 	 * @throws TimeoutException                   if the request times out before receiving a response. This
@@ -532,9 +539,9 @@ public final class KubernetesCluster
 	 * @throws InterruptedException               if the thread is interrupted while waiting for a response.
 	 *                                            This can happen due to shutdown signals.
 	 * @throws KubernetesClusterNotFoundException if the cluster could not be found
-	 * @see KubernetesClusterSpecification#copyImmutablePropertiesFrom(KubernetesCluster)
+	 * @see ClusterConfiguration#copyUnchangeablePropertiesFrom(Cluster)
 	 */
-	public void update(KubernetesClusterSpecification target)
+	public void update(ClusterConfiguration target)
 		throws IOException, TimeoutException, InterruptedException, KubernetesClusterNotFoundException
 	{
 		requireThat(target.zone(), "target.zone").isEqualTo(zone);
@@ -543,9 +550,9 @@ public final class KubernetesCluster
 		requireThat(target.serviceSubnet(), "target.serviceSubnet").isEqualTo(serviceSubnet);
 		requireThat(target.vpc(), "target.vpc").isEqualTo(vpc);
 		requireThat(target.nodePools(), "target.nodePools").isEqualTo(nodePools.stream().
-			map(NodePool::toSpecification).toList());
+			map(NodePool::toConfiguration).toList());
 
-		ObjectMapper om = scope.getObjectMapper();
+		ObjectMapper om = client.getObjectMapper();
 		ObjectNode requestBody = om.createObjectNode();
 		requestBody.put("name", target.name());
 		if (!target.tags().equals(tags))
@@ -563,10 +570,10 @@ public final class KubernetesCluster
 		if (target.highAvailability() != highAvailability)
 			requestBody.put("ha", target.highAvailability());
 
-		ClientRequests clientRequests = scope.getClientRequests();
+		ClientRequests clientRequests = client.getClientRequests();
 		// https://docs.digitalocean.com/reference/api/api-referenc /#operation/kubernetes_update_cluster
 		String uri = REST_SERVER + "/v2/kubernetes/clusters/" + id;
-		Request request = DigitalOceans.createRequest(scope, uri, requestBody).
+		Request request = DigitalOceans.createRequest(client, uri, requestBody).
 			method(PUT);
 		ContentResponse serverResponse = clientRequests.send(request);
 		switch (serverResponse.getStatus())
@@ -589,6 +596,7 @@ public final class KubernetesCluster
 	 * @param timeout the maximum amount of time to wait
 	 * @return the updated cluster
 	 * @throws NullPointerException               if {@code state} is null
+	 * @throws IllegalStateException              if the client is closed
 	 * @throws IOException                        if an I/O error occurs. These errors are typically transient,
 	 *                                            and retrying the request may resolve the issue.
 	 * @throws TimeoutException                   if the operation times out before the cluster reaches the
@@ -599,13 +607,13 @@ public final class KubernetesCluster
 	 * @throws KubernetesClusterNotFoundException if the cluster could not be found
 	 * @see #waitForDeletion(Duration)
 	 */
-	public KubernetesCluster waitFor(State state, Duration timeout)
+	public Cluster waitFor(State state, Duration timeout)
 		throws IOException, TimeoutException, InterruptedException, KubernetesClusterNotFoundException
 	{
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/kubernetes_get_cluster
-		ClientRequests clientRequests = scope.getClientRequests();
+		ClientRequests clientRequests = client.getClientRequests();
 		String uri = REST_SERVER + "/v2/kubernetes/clusters/" + id;
-		Request request = DigitalOceans.createRequest(scope, uri).
+		Request request = DigitalOceans.createRequest(client, uri).
 			method(GET);
 		RetryDelay retryDelay = new RetryDelay(Duration.ofSeconds(3), Duration.ofSeconds(30), 2);
 		TimeLimit timeLimit = new TimeLimit(timeout);
@@ -623,8 +631,8 @@ public final class KubernetesCluster
 					"Unexpected response: " + clientRequests.toString(serverResponse) + "\n" +
 						"Request: " + clientRequests.toString(request));
 			}
-			JsonNode body = DigitalOceans.getResponseBody(scope, serverResponse);
-			KubernetesCluster newCluster = getByJson(scope, body.get("kubernetes_cluster"));
+			JsonNode body = DigitalOceans.getResponseBody(client, serverResponse);
+			Cluster newCluster = getByJson(client, body.get("kubernetes_cluster"));
 			if (newCluster.getStatus().state.equals(state))
 				return newCluster;
 			if (!timeLimit.getTimeLeft().isPositive())
@@ -637,20 +645,21 @@ public final class KubernetesCluster
 	/**
 	 * Destroys the cluster and all of its associated resources.
 	 *
-	 * @throws IOException          if an I/O error occurs. These errors are typically transient, and retrying
-	 *                              the request may resolve the issue.
-	 * @throws TimeoutException     if the request times out before receiving a response. This might indicate
-	 *                              network latency or server overload.
-	 * @throws InterruptedException if the thread is interrupted while waiting for a response. This can happen
-	 *                              due to shutdown signals.
+	 * @throws IllegalStateException if the client is closed
+	 * @throws IOException           if an I/O error occurs. These errors are typically transient, and retrying
+	 *                               the request may resolve the issue.
+	 * @throws TimeoutException      if the request times out before receiving a response. This might indicate
+	 *                               network latency or server overload.
+	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
+	 *                               due to shutdown signals.
 	 */
 	public void destroyRecursively() throws IOException, TimeoutException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/kubernetes_destroy_associatedResourcesDangerous
-		ClientRequests clientRequests = scope.getClientRequests();
+		ClientRequests clientRequests = client.getClientRequests();
 		String uri = REST_SERVER + "/v2/kubernetes/clusters/" + id + "/destroy_with_associated_resources/" +
 			"dangerous";
-		Request request = DigitalOceans.createRequest(scope, uri).
+		Request request = DigitalOceans.createRequest(client, uri).
 			method(DELETE);
 		ContentResponse serverResponse = clientRequests.send(request);
 		switch (serverResponse.getStatus())
@@ -695,30 +704,30 @@ public final class KubernetesCluster
 	public static final class NodePool
 	{
 		/**
-		 * Creates a new {@code NodePool} specification.
+		 * Creates a new {@code NodePool} configuration.
 		 *
-		 * @param scope                the client configuration
+		 * @param client               the client configuration
 		 * @param name                 the name of the node pool
 		 * @param dropletType          the type of droplets to use for cluster nodes
 		 * @param initialNumberOfNodes the initial number of nodes to populate the pool with
-		 * @return a specification
+		 * @return a configuration
 		 * @throws NullPointerException     if any of the arguments are null
 		 * @throws IllegalArgumentException if any of the arguments contain leading or trailing whitespace or are
 		 *                                  empty
 		 */
-		public static NodePoolSpecification specification(DigitalOceanScope scope, String name,
+		public static NodePoolConfiguration configuration(DigitalOceanClient client, String name,
 			DropletType dropletType, int initialNumberOfNodes)
 		{
-			return new NodePoolSpecification(scope, name, dropletType, initialNumberOfNodes);
+			return new NodePoolConfiguration(client, name, dropletType, initialNumberOfNodes);
 		}
 
 		/**
-		 * @param scope the client configuration
-		 * @param json  the JSON representation of the node pool
+		 * @param client the client configuration
+		 * @param json   the JSON representation of the node pool
 		 * @return the node pool
 		 * @throws NullPointerException if any of the arguments are null
 		 */
-		private static NodePool getByJson(DigitalOceanScope scope, JsonNode json)
+		private static NodePool getByJson(DigitalOceanClient client, JsonNode json)
 		{
 			DropletType dropletType = DropletType.getBySlug(json.get("size").textValue());
 			String id = json.get("id").textValue();
@@ -758,11 +767,11 @@ public final class KubernetesCluster
 			JsonNode nodesNode = json.get("nodes");
 			for (JsonNode node : nodesNode)
 				nodes.add(Node.getByJson(node));
-			return new NodePool(scope, id, name, dropletType, initialNumberOfNodes, tags, labels, taints, autoScale,
-				minNodes, maxNodes, nodes);
+			return new NodePool(client, id, name, dropletType, initialNumberOfNodes, tags, labels, taints,
+				autoScale, minNodes, maxNodes, nodes);
 		}
 
-		private final DigitalOceanScope scope;
+		private final DigitalOceanClient client;
 		private final String id;
 		private final String name;
 		private final DropletType dropletType;
@@ -777,7 +786,7 @@ public final class KubernetesCluster
 		/**
 		 * Creates a new node pool.
 		 *
-		 * @param scope                the client configuration
+		 * @param client               the client configuration
 		 * @param id                   the ID of the node pool
 		 * @param name                 the name of the node pool
 		 * @param dropletType          the type of droplets to use for cluster nodes
@@ -802,11 +811,11 @@ public final class KubernetesCluster
 		 *                                    <li>{@code minNodes} is greater than {@code maxNodes}.</li>
 		 *                                  </ul>
 		 */
-		public NodePool(DigitalOceanScope scope, String id, String name, DropletType dropletType,
+		public NodePool(DigitalOceanClient client, String id, String name, DropletType dropletType,
 			int initialNumberOfNodes, Set<String> tags, Set<String> labels, Set<String> taints, boolean autoScale,
 			int minNodes, int maxNodes, List<Node> nodes)
 		{
-			requireThat(scope, "scope").isNotNull();
+			requireThat(client, "client").isNotNull();
 			requireThat(id, "id").isStripped().isNotEmpty();
 			requireThat(name, "name").isStripped().isNotEmpty();
 			requireThat(dropletType, "dropletType").isNotNull();
@@ -823,7 +832,7 @@ public final class KubernetesCluster
 
 			requireThat(nodes, "nodes").isNotNull();
 
-			this.scope = scope;
+			this.client = client;
 			this.id = id;
 			this.name = name;
 			this.dropletType = dropletType;
@@ -949,13 +958,13 @@ public final class KubernetesCluster
 		}
 
 		/**
-		 * Returns the specification of this {@code NodePool}.
+		 * Returns the configuration of this {@code NodePool}.
 		 *
-		 * @return the specification of this {@code NodePool}
+		 * @return the configuration of this {@code NodePool}
 		 */
-		public NodePoolSpecification toSpecification()
+		public NodePoolConfiguration toConfiguration()
 		{
-			NodePoolSpecification spec = new NodePoolSpecification(scope, name, dropletType, initialNumberOfNodes).
+			NodePoolConfiguration spec = new NodePoolConfiguration(client, name, dropletType, initialNumberOfNodes).
 				tags(tags).
 				labels(labels).
 				taints(taints);
@@ -985,9 +994,9 @@ public final class KubernetesCluster
 	/**
 	 * The desired state of a {@code NodePool}.
 	 */
-	public static final class NodePoolSpecification
+	public static final class NodePoolConfiguration
 	{
-		private final DigitalOceanScope scope;
+		private final DigitalOceanClient client;
 		private final String name;
 		private final DropletType dropletType;
 		private final int initialNumberOfNodes;
@@ -1001,7 +1010,7 @@ public final class KubernetesCluster
 		/**
 		 * Creates a new node pool builder.
 		 *
-		 * @param scope                the client configuration
+		 * @param client               the client configuration
 		 * @param name                 the name of the node pool
 		 * @param dropletType          the type of droplets to use for cluster nodes
 		 * @param initialNumberOfNodes the initial number of nodes to populate the pool with
@@ -1013,15 +1022,15 @@ public final class KubernetesCluster
 		 *                                    <li>{@code initialNumberOfNodes} is negative or zero.</li>
 		 *                                  </ul>
 		 */
-		public NodePoolSpecification(DigitalOceanScope scope, String name, DropletType dropletType,
+		public NodePoolConfiguration(DigitalOceanClient client, String name, DropletType dropletType,
 			int initialNumberOfNodes)
 		{
-			requireThat(scope, "scope").isNotNull();
+			requireThat(client, "client").isNotNull();
 			requireThat(name, "name").isStripped().isNotEmpty();
 			requireThat(dropletType, "dropletType").isNotNull();
 			requireThat(initialNumberOfNodes, "initialNumberOfNodes").isPositive();
 
-			this.scope = scope;
+			this.client = client;
 			this.name = name;
 			this.dropletType = dropletType;
 			this.initialNumberOfNodes = initialNumberOfNodes;
@@ -1065,7 +1074,7 @@ public final class KubernetesCluster
 		 * @throws NullPointerException     if {@code tag} is null
 		 * @throws IllegalArgumentException if the tag contains leading or trailing whitespace or is empty
 		 */
-		public NodePoolSpecification tag(String tag)
+		public NodePoolConfiguration tag(String tag)
 		{
 			requireThat(tag, "tag").isStripped().isNotEmpty();
 			this.tags.add(tag);
@@ -1081,7 +1090,7 @@ public final class KubernetesCluster
 		 * @throws IllegalArgumentException if any of the tags are null, contain leading or trailing whitespace or
 		 *                                  are empty
 		 */
-		public NodePoolSpecification tags(Collection<String> tags)
+		public NodePoolConfiguration tags(Collection<String> tags)
 		{
 			requireThat(tags, "tags").isNotNull().doesNotContain(null);
 			this.tags.clear();
@@ -1111,7 +1120,7 @@ public final class KubernetesCluster
 		 * @throws NullPointerException     if {@code label} is null
 		 * @throws IllegalArgumentException if the label contains leading or trailing whitespace or is empty
 		 */
-		public NodePoolSpecification label(String label)
+		public NodePoolConfiguration label(String label)
 		{
 			requireThat(label, "label").isStripped().isNotEmpty();
 			this.labels.add(label);
@@ -1127,7 +1136,7 @@ public final class KubernetesCluster
 		 * @throws IllegalArgumentException if any of the labels are null, contain leading or trailing whitespace
 		 *                                  or are empty
 		 */
-		public NodePoolSpecification labels(Collection<String> labels)
+		public NodePoolConfiguration labels(Collection<String> labels)
 		{
 			requireThat(labels, "labels").isNotNull().doesNotContain(null);
 			this.labels.clear();
@@ -1157,7 +1166,7 @@ public final class KubernetesCluster
 		 * @throws NullPointerException     if {@code taint} is null
 		 * @throws IllegalArgumentException if the taint contains leading or trailing whitespace or is empty
 		 */
-		public NodePoolSpecification taint(String taint)
+		public NodePoolConfiguration taint(String taint)
 		{
 			requireThat(taint, "taint").isStripped().isNotEmpty();
 			this.taints.add(taint);
@@ -1173,7 +1182,7 @@ public final class KubernetesCluster
 		 * @throws IllegalArgumentException if any of the taints are null, contain leading or trailing whitespace
 		 *                                  or are empty
 		 */
-		public NodePoolSpecification taints(Collection<String> taints)
+		public NodePoolConfiguration taints(Collection<String> taints)
 		{
 			requireThat(taints, "taints").isNotNull().doesNotContain(null);
 			this.taints.clear();
@@ -1209,7 +1218,7 @@ public final class KubernetesCluster
 		 *                                    {@link #initialNumberOfNodes()}</li>
 		 *                                  </ul>
 		 */
-		public NodePoolSpecification autoscale(int minNodes, int maxNodes)
+		public NodePoolConfiguration autoscale(int minNodes, int maxNodes)
 		{
 			requireThat(minNodes, "minNodes").isLessThanOrEqualTo(maxNodes, "maxNodes");
 			this.autoScale = true;
@@ -1252,10 +1261,11 @@ public final class KubernetesCluster
 		 * Returns the JSON representation of this object.
 		 *
 		 * @return the JSON representation of this object
+		 * @throws IllegalStateException if the client is closed
 		 */
 		public ObjectNode toJson()
 		{
-			ObjectNode json = scope.getObjectMapper().createObjectNode().
+			ObjectNode json = client.getObjectMapper().createObjectNode().
 				put("size", dropletType.getSlug()).
 				put("name", name).
 				put("count", initialNumberOfNodes);
@@ -1296,7 +1306,7 @@ public final class KubernetesCluster
 		@Override
 		public boolean equals(Object o)
 		{
-			return o instanceof NodePoolSpecification other && other.name.equals(name) &&
+			return o instanceof NodePoolConfiguration other && other.name.equals(name) &&
 				other.dropletType.equals(dropletType) && other.initialNumberOfNodes == initialNumberOfNodes &&
 				other.tags.equals(tags) && other.labels.equals(labels) && other.taints.equals(taints) &&
 				other.autoScale == autoScale && other.minNodes == minNodes && other.maxNodes == maxNodes;
@@ -1305,7 +1315,7 @@ public final class KubernetesCluster
 		@Override
 		public String toString()
 		{
-			return new ToStringBuilder(NodePoolSpecification.class).
+			return new ToStringBuilder(NodePoolConfiguration.class).
 				add("name", name).
 				add("type", dropletType).
 				add("count", initialNumberOfNodes).
@@ -1551,13 +1561,13 @@ public final class KubernetesCluster
 	public static final class MaintenanceWindow
 	{
 		/**
-		 * @param scope the client configuration
-		 * @param json  the JSON representation of the maintenance window
+		 * @param client the client configuration
+		 * @param json   the JSON representation of the maintenance window
 		 * @return the MaintenanceWindow
 		 * @throws NullPointerException     if any of the arguments are null
 		 * @throws IllegalArgumentException if the server response could not be parsed
 		 */
-		private static MaintenanceWindow getByJson(DigitalOceanScope scope, JsonNode json)
+		private static MaintenanceWindow getByJson(DigitalOceanClient client, JsonNode json)
 		{
 			OffsetTime startTime = LocalTime.parse(json.get("start_time").textValue(), HOUR_MINUTE).
 				atOffset(ZoneOffset.UTC);
@@ -1567,26 +1577,27 @@ public final class KubernetesCluster
 				day = null;
 			else
 				day = DayOfWeek.valueOf(dayAsString.toUpperCase(Locale.ROOT));
-			return new MaintenanceWindow(scope, startTime, day);
+			return new MaintenanceWindow(client, startTime, day);
 		}
 
-		private final DigitalOceanScope scope;
+		private final DigitalOceanClient client;
 		private final OffsetTime startTime;
 		private final DayOfWeek day;
 
 		/**
-		 * Creates a new policy.
+		 * Creates a new schedule.
 		 *
-		 * @param scope     the client configuration
+		 * @param client    the client configuration
 		 * @param startTime the start time in UTC when maintenance may take place
-		 * @param day       the day of the week when maintenance may take place. {@code null} if any day.
-		 * @throws NullPointerException if {@code startTime} is null
+		 * @param day       the day of the week when maintenance may take place; {@code null} if maintenance can
+		 *                  occur on any day.
+		 * @throws NullPointerException if {@code client} or {@code startTime} are null
 		 */
-		public MaintenanceWindow(DigitalOceanScope scope, OffsetTime startTime, DayOfWeek day)
+		public MaintenanceWindow(DigitalOceanClient client, OffsetTime startTime, DayOfWeek day)
 		{
-			requireThat(scope, "scope").isNotNull();
+			requireThat(client, "client").isNotNull();
 			requireThat(startTime, "startTime").isNotNull();
-			this.scope = scope;
+			this.client = client;
 			this.startTime = startTime;
 			this.day = day;
 		}
@@ -1595,10 +1606,11 @@ public final class KubernetesCluster
 		 * Returns the JSON representation of this object.
 		 *
 		 * @return the JSON representation of this object
+		 * @throws IllegalStateException if the client is closed
 		 */
 		public ObjectNode toJson()
 		{
-			ObjectNode json = scope.getObjectMapper().createObjectNode();
+			ObjectNode json = client.getObjectMapper().createObjectNode();
 			OffsetTime startTimeAtUtc = startTime.withOffsetSameInstant(ZoneOffset.UTC);
 			json.put("start_time", HOUR_MINUTE.format(startTimeAtUtc));
 			if (day == null)

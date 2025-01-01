@@ -1,16 +1,18 @@
-package com.github.cowwoc.digitalocean.resource;
+package com.github.cowwoc.digitalocean.resource.kubernetes;
 
-import com.github.cowwoc.digitalocean.internal.util.ClientRequests;
-import com.github.cowwoc.digitalocean.internal.util.DigitalOceans;
-import com.github.cowwoc.digitalocean.internal.util.ToStringBuilder;
-import com.github.cowwoc.digitalocean.resource.KubernetesCluster.MaintenanceWindow;
-import com.github.cowwoc.digitalocean.resource.KubernetesCluster.NodePool;
-import com.github.cowwoc.digitalocean.resource.KubernetesCluster.NodePoolSpecification;
-import com.github.cowwoc.digitalocean.scope.DigitalOceanScope;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.github.cowwoc.digitalocean.client.DigitalOceanClient;
+import com.github.cowwoc.digitalocean.internal.util.ClientRequests;
+import com.github.cowwoc.digitalocean.internal.util.DigitalOceans;
+import com.github.cowwoc.digitalocean.internal.util.ToStringBuilder;
+import com.github.cowwoc.digitalocean.resource.Vpc;
+import com.github.cowwoc.digitalocean.resource.Zone;
+import com.github.cowwoc.digitalocean.resource.kubernetes.Cluster.MaintenanceWindow;
+import com.github.cowwoc.digitalocean.resource.kubernetes.Cluster.NodePool;
+import com.github.cowwoc.digitalocean.resource.kubernetes.Cluster.NodePoolConfiguration;
 import com.github.cowwoc.digitalocean.util.CreateResult;
 import org.eclipse.jetty.client.ContentResponse;
 import org.eclipse.jetty.client.Request;
@@ -31,9 +33,9 @@ import static org.eclipse.jetty.http.HttpStatus.UNPROCESSABLE_ENTITY_422;
 /**
  * The desired state of a Kubernetes cluster.
  */
-public final class KubernetesClusterSpecification
+public final class ClusterConfiguration
 {
-	private final DigitalOceanScope scope;
+	private final DigitalOceanClient client;
 	private final String name;
 	private final Zone zone;
 	private final KubernetesVersion version;
@@ -41,7 +43,7 @@ public final class KubernetesClusterSpecification
 	private String serviceSubnet = "";
 	private Vpc vpc;
 	private final Set<String> tags = new LinkedHashSet<>();
-	private final List<NodePoolSpecification> nodePools;
+	private final List<NodePoolConfiguration> nodePools;
 	private MaintenanceWindow maintenanceWindow;
 	private boolean autoUpgrade;
 	private boolean surgeUpgrade;
@@ -49,9 +51,9 @@ public final class KubernetesClusterSpecification
 	private boolean registryEnabled;
 
 	/**
-	 * Creates a new cluster specification.
+	 * Creates a new cluster configuration.
 	 *
-	 * @param scope     the client configuration
+	 * @param client    the client configuration
 	 * @param name      the name of the cluster. Names are case-insensitive.
 	 * @param zone      the zone to deploy the cluster into
 	 * @param version   the version of Kubernetes software to deploy
@@ -66,15 +68,15 @@ public final class KubernetesClusterSpecification
 	 */
 	// WORKAROUND: https://github.com/checkstyle/checkstyle/issues/15683
 	@SuppressWarnings("checkstyle:javadocmethod")
-	KubernetesClusterSpecification(DigitalOceanScope scope, String name, Zone zone, KubernetesVersion version,
-		List<NodePoolSpecification> nodePools)
+	ClusterConfiguration(DigitalOceanClient client, String name, Zone zone, KubernetesVersion version,
+		List<NodePoolConfiguration> nodePools)
 	{
-		requireThat(scope, "scope").isNotNull();
+		requireThat(client, "client").isNotNull();
 		requireThat(name, "name").isStripped().isNotEmpty();
 		requireThat(zone, "zone").isNotNull();
 		requireThat(version, "version").isNotNull();
 		requireThat(nodePools, "nodePools").isNotEmpty();
-		this.scope = scope;
+		this.client = client;
 		this.name = name;
 		this.zone = zone;
 		this.version = version;
@@ -120,7 +122,7 @@ public final class KubernetesClusterSpecification
 	 * @throws IllegalArgumentException if {@code clusterSubnet} contains leading or trailing whitespace or is
 	 *                                  empty
 	 */
-	public KubernetesClusterSpecification clusterSubnet(String clusterSubnet)
+	public ClusterConfiguration clusterSubnet(String clusterSubnet)
 	{
 		requireThat(clusterSubnet, "clusterSubnet").isStripped().isNotEmpty();
 		this.clusterSubnet = clusterSubnet;
@@ -146,7 +148,7 @@ public final class KubernetesClusterSpecification
 	 * @throws IllegalArgumentException if {@code serviceSubnet} contains leading or trailing whitespace or is
 	 *                                  empty
 	 */
-	public KubernetesClusterSpecification serviceSubnet(String serviceSubnet)
+	public ClusterConfiguration serviceSubnet(String serviceSubnet)
 	{
 		requireThat(serviceSubnet, "serviceSubnet").isStripped().isNotEmpty();
 		this.serviceSubnet = serviceSubnet;
@@ -169,9 +171,9 @@ public final class KubernetesClusterSpecification
 	 * @param vpc the VPC
 	 * @return this
 	 * @throws NullPointerException if {@code vpc} is null
-	 * @see Vpc#getDefault(DigitalOceanScope, Zone)
+	 * @see Vpc#getDefault(DigitalOceanClient, Zone)
 	 */
-	public KubernetesClusterSpecification vpc(Vpc vpc)
+	public ClusterConfiguration vpc(Vpc vpc)
 	{
 		requireThat(vpc, "vpc").isNotNull();
 		this.vpc = vpc;
@@ -196,7 +198,7 @@ public final class KubernetesClusterSpecification
 	 * @throws NullPointerException     if {@code tag} is null
 	 * @throws IllegalArgumentException if {@code tag} contains leading or trailing whitespace or is empty
 	 */
-	public KubernetesClusterSpecification tag(String tag)
+	public ClusterConfiguration tag(String tag)
 	{
 		requireThat(tag, "tag").isStripped().isNotEmpty();
 		tags.add(tag);
@@ -211,7 +213,7 @@ public final class KubernetesClusterSpecification
 	 * @throws NullPointerException     if {@code tags} is null
 	 * @throws IllegalArgumentException if any of the tags contains leading or trailing whitespace or are empty
 	 */
-	public KubernetesClusterSpecification tags(Set<String> tags)
+	public ClusterConfiguration tags(Set<String> tags)
 	{
 		requireThat(tags, "tags").isNotNull();
 		this.tags.clear();
@@ -240,7 +242,7 @@ public final class KubernetesClusterSpecification
 	 * @return this
 	 * @throws NullPointerException if {@code nodePools} is null
 	 */
-	public KubernetesClusterSpecification nodePools(List<NodePoolSpecification> nodePools)
+	public ClusterConfiguration nodePools(List<NodePoolConfiguration> nodePools)
 	{
 		requireThat(nodePools, "nodePools").isNotNull();
 		this.nodePools.clear();
@@ -253,7 +255,7 @@ public final class KubernetesClusterSpecification
 	 *
 	 * @return the node pools
 	 */
-	public List<NodePoolSpecification> nodePools()
+	public List<NodePoolConfiguration> nodePools()
 	{
 		return nodePools;
 	}
@@ -265,7 +267,7 @@ public final class KubernetesClusterSpecification
 	 * @return this
 	 * @throws NullPointerException if {@code maintenanceWindow} is null
 	 */
-	public KubernetesClusterSpecification maintenanceWindow(MaintenanceWindow maintenanceWindow)
+	public ClusterConfiguration maintenanceWindow(MaintenanceWindow maintenanceWindow)
 	{
 		requireThat(maintenanceWindow, "maintenanceWindow").isNotNull();
 		this.maintenanceWindow = maintenanceWindow;
@@ -289,7 +291,7 @@ public final class KubernetesClusterSpecification
 	 *                    during its maintenance window.
 	 * @return this
 	 */
-	public KubernetesClusterSpecification autoUpgrade(boolean autoUpgrade)
+	public ClusterConfiguration autoUpgrade(boolean autoUpgrade)
 	{
 		this.autoUpgrade = autoUpgrade;
 		return this;
@@ -314,7 +316,7 @@ public final class KubernetesClusterSpecification
 	 * @param surgeUpgrade {@code true} if new nodes should be deployed before destroying the outdated nodes
 	 * @return this
 	 */
-	public KubernetesClusterSpecification surgeUpgrade(boolean surgeUpgrade)
+	public ClusterConfiguration surgeUpgrade(boolean surgeUpgrade)
 	{
 		this.surgeUpgrade = surgeUpgrade;
 		return this;
@@ -339,7 +341,7 @@ public final class KubernetesClusterSpecification
 	 * @param highAvailability {@code true} if the control plane should run in a highly available configuration
 	 * @return this
 	 */
-	public KubernetesClusterSpecification highAvailability(boolean highAvailability)
+	public ClusterConfiguration highAvailability(boolean highAvailability)
 	{
 		this.highAvailability = highAvailability;
 		return this;
@@ -364,7 +366,7 @@ public final class KubernetesClusterSpecification
 	 * @param registryEnabled {@code true} if a container registry is integrated with the cluster
 	 * @return this
 	 */
-	public KubernetesClusterSpecification registryEnabled(boolean registryEnabled)
+	public ClusterConfiguration registryEnabled(boolean registryEnabled)
 	{
 		this.registryEnabled = registryEnabled;
 		return this;
@@ -383,10 +385,11 @@ public final class KubernetesClusterSpecification
 	}
 
 	/**
-	 * Creates a cluster based on this specification.
+	 * Creates a cluster based on this configuration.
 	 *
 	 * @return the new or existing cluster
 	 * @throws IllegalArgumentException if a cluster with this name already exists
+	 * @throws IllegalStateException    if the client is closed
 	 * @throws IOException              if an I/O error occurs. These errors are typically transient, and
 	 *                                  retrying the request may resolve the issue.
 	 * @throws TimeoutException         if the request times out before receiving a response. This might
@@ -394,17 +397,17 @@ public final class KubernetesClusterSpecification
 	 * @throws InterruptedException     if the thread is interrupted while waiting for a response. This can
 	 *                                  happen due to shutdown signals.
 	 */
-	public CreateResult<KubernetesCluster> create()
+	public CreateResult<Cluster> create()
 		throws IOException, TimeoutException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/kubernetes_create_cluster
-		ObjectMapper om = scope.getObjectMapper();
+		ObjectMapper om = client.getObjectMapper();
 		ObjectNode requestBody = om.createObjectNode().
 			put("name", name).
 			put("region", zone.toSlug()).
 			put("version", version.toSlug());
 		ArrayNode nodePoolsNode = requestBody.putArray("node_pools");
-		for (NodePoolSpecification pool : nodePools)
+		for (NodePoolConfiguration pool : nodePools)
 			nodePoolsNode.add(pool.toJson());
 		if (!clusterSubnet.isEmpty())
 			requestBody.put("clusterSubnet", clusterSubnet);
@@ -423,24 +426,24 @@ public final class KubernetesClusterSpecification
 		if (registryEnabled)
 			requestBody.put("registry_enavbled", true);
 		String uri = REST_SERVER + "/v2/kubernetes/clusters";
-		Request request = DigitalOceans.createRequest(scope, uri, requestBody).
+		Request request = DigitalOceans.createRequest(client, uri, requestBody).
 			method(POST);
-		ClientRequests clientRequests = scope.getClientRequests();
+		ClientRequests clientRequests = client.getClientRequests();
 		ContentResponse serverResponse = clientRequests.send(request);
 		return switch (serverResponse.getStatus())
 		{
 			case CREATED_201 ->
 			{
-				JsonNode body = DigitalOceans.getResponseBody(scope, serverResponse);
-				yield CreateResult.created(KubernetesCluster.getByJson(scope, body.get("kubernetes_cluster")));
+				JsonNode body = DigitalOceans.getResponseBody(client, serverResponse);
+				yield CreateResult.created(Cluster.getByJson(client, body.get("kubernetes_cluster")));
 			}
 			case UNPROCESSABLE_ENTITY_422 ->
 			{
 				// Example: "a cluster with this name already exists"
-				JsonNode json = DigitalOceans.getResponseBody(scope, serverResponse);
+				JsonNode json = DigitalOceans.getResponseBody(client, serverResponse);
 				String message = json.get("message").textValue();
 				if (message.equals("a cluster with this name already exists"))
-					yield CreateResult.conflictedWith(KubernetesCluster.getByName(scope, name));
+					yield CreateResult.conflictedWith(Cluster.getByName(client, name));
 				throw new AssertionError(
 					"Unexpected response: " + clientRequests.toString(serverResponse) + "\n" +
 						"Request: " + clientRequests.toString(request));
@@ -452,24 +455,24 @@ public final class KubernetesClusterSpecification
 	}
 
 	/**
-	 * Copies immutable properties from an existing cluster into this specification. Certain properties cannot
-	 * be altered once the cluster is created, and this method ensures those properties are retained.
+	 * Copies unchangeable properties from an existing cluster into this configuration. Certain properties
+	 * cannot be altered once the cluster is created, and this method ensures these properties are retained.
 	 *
 	 * @param existingCluster the existing cluster
 	 * @throws NullPointerException if {@code existingCluster} is null
 	 */
-	public void copyImmutablePropertiesFrom(KubernetesCluster existingCluster)
+	public void copyUnchangeablePropertiesFrom(Cluster existingCluster)
 	{
 		clusterSubnet(existingCluster.getClusterSubnet());
 		serviceSubnet(existingCluster.getServiceSubnet());
 		vpc(existingCluster.getVpc());
-		nodePools(existingCluster.getNodePools().stream().map(NodePool::toSpecification).toList());
+		nodePools(existingCluster.getNodePools().stream().map(NodePool::toConfiguration).toList());
 	}
 
 	@Override
 	public String toString()
 	{
-		return new ToStringBuilder(KubernetesClusterSpecification.class).
+		return new ToStringBuilder(ClusterConfiguration.class).
 			add("name", name).
 			add("zone", zone).
 			add("version", version).

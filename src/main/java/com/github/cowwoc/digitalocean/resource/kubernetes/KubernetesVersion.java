@@ -1,4 +1,4 @@
-package com.github.cowwoc.digitalocean.resource;
+package com.github.cowwoc.digitalocean.resource.kubernetes;
 
 import java.util.Locale;
 

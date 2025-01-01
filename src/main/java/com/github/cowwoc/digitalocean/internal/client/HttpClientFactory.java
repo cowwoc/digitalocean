@@ -1,4 +1,4 @@
-package com.github.cowwoc.digitalocean.internal.scope;
+package com.github.cowwoc.digitalocean.internal.client;
 
 import com.github.cowwoc.pouch.core.ConcurrentLazyFactory;
 import com.github.cowwoc.pouch.core.WrappedCheckedException;

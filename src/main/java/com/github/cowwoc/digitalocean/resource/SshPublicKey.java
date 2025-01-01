@@ -1,14 +1,14 @@
 package com.github.cowwoc.digitalocean.resource;
 
-import com.github.cowwoc.digitalocean.internal.util.ClientRequests;
-import com.github.cowwoc.digitalocean.internal.util.DigitalOceans;
-import com.github.cowwoc.digitalocean.internal.util.SshKeys;
-import com.github.cowwoc.digitalocean.internal.util.ToStringBuilder;
-import com.github.cowwoc.digitalocean.scope.DigitalOceanScope;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.github.cowwoc.digitalocean.client.DigitalOceanClient;
+import com.github.cowwoc.digitalocean.internal.util.ClientRequests;
+import com.github.cowwoc.digitalocean.internal.util.DigitalOceans;
+import com.github.cowwoc.digitalocean.internal.util.SshKeys;
+import com.github.cowwoc.digitalocean.internal.util.ToStringBuilder;
 import com.github.cowwoc.digitalocean.util.CreateResult;
 import org.eclipse.jetty.client.ContentResponse;
 import org.eclipse.jetty.client.HttpClient;
@@ -42,23 +42,24 @@ public final class SshPublicKey
 	/**
 	 * Looks up an SSH key by its ID.
 	 *
-	 * @param scope the client configuration
-	 * @param id    the ID of the public key
+	 * @param client the client configuration
+	 * @param id     the ID of the public key
 	 * @return null if no match was found
-	 * @throws NullPointerException if {@code scope} is null
-	 * @throws IOException          if an I/O error occurs. These errors are typically transient, and retrying
-	 *                              the request may resolve the issue.
-	 * @throws TimeoutException     if the request times out before receiving a response. This might indicate
-	 *                              network latency or server overload.
-	 * @throws InterruptedException if the thread is interrupted while waiting for a response. This can happen
-	 *                              due to shutdown signals.
+	 * @throws NullPointerException  if {@code client} is null
+	 * @throws IllegalStateException if the client is closed
+	 * @throws IOException           if an I/O error occurs. These errors are typically transient, and retrying
+	 *                               the request may resolve the issue.
+	 * @throws TimeoutException      if the request times out before receiving a response. This might indicate
+	 *                               network latency or server overload.
+	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
+	 *                               due to shutdown signals.
 	 */
-	public static SshPublicKey getById(DigitalOceanScope scope, int id)
+	public static SshPublicKey getById(DigitalOceanClient client, int id)
 		throws IOException, TimeoutException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/sshKeys_list
 		String uri = REST_SERVER + "/v2/account/keys";
-		return DigitalOceans.getElement(scope, uri, Map.of(), body ->
+		return DigitalOceans.getElement(client, uri, Map.of(), body ->
 		{
 			JsonNode sshKeys = body.get("ssh_keys");
 			if (sshKeys == null)
@@ -67,51 +68,39 @@ public final class SshPublicKey
 			{
 				int actualId = DigitalOceans.toInt(sshKey, "id");
 				if (actualId == id)
-					return getByJson(scope, sshKey);
+					return getByJson(client, sshKey);
 			}
 			return null;
 		});
 	}
 
 	/**
-	 * @param scope the client configuration
-	 * @param json  the JSON representation of the key
-	 * @return the key
-	 * @throws NullPointerException if any of the arguments are null
-	 */
-	private static SshPublicKey getByJson(DigitalOceanScope scope, JsonNode json)
-	{
-		int id = DigitalOceans.toInt(json, "id");
-		String name = json.get("name").textValue();
-		String fingerprint = json.get("fingerprint").textValue();
-		return new SshPublicKey(scope, id, name, fingerprint);
-	}
-
-	/**
 	 * Lists all SSH keys.
 	 *
-	 * @param scope the client configuration
+	 * @param client the client configuration
 	 * @return the list of all SSH keys
-	 * @throws IOException          if an I/O error occurs. These errors are typically transient, and retrying
-	 *                              the request may resolve the issue.
-	 * @throws TimeoutException     if the request times out before receiving a response. This might indicate
-	 *                              network latency or server overload.
-	 * @throws InterruptedException if the thread is interrupted while waiting for a response. This can happen
-	 *                              due to shutdown signals.
+	 * @throws NullPointerException  if {@code client} is null
+	 * @throws IllegalStateException if the client is closed
+	 * @throws IOException           if an I/O error occurs. These errors are typically transient, and retrying
+	 *                               the request may resolve the issue.
+	 * @throws TimeoutException      if the request times out before receiving a response. This might indicate
+	 *                               network latency or server overload.
+	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
+	 *                               due to shutdown signals.
 	 */
-	public static List<SshPublicKey> list(DigitalOceanScope scope)
+	public static List<SshPublicKey> list(DigitalOceanClient client)
 		throws IOException, TimeoutException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/sshKeys_list
 		String uri = REST_SERVER + "/v2/account/keys";
-		return DigitalOceans.getElements(scope, uri, Map.of(), body ->
+		return DigitalOceans.getElements(client, uri, Map.of(), body ->
 		{
 			JsonNode sshKeys = body.get("ssh_keys");
 			if (sshKeys == null)
 				throw new JsonMappingException(null, "ssh_keys must be set");
 			List<SshPublicKey> keys = new ArrayList<>();
 			for (JsonNode sshKey : sshKeys)
-				keys.add(getByJson(scope, sshKey));
+				keys.add(getByJson(client, sshKey));
 			return keys;
 		});
 	}
@@ -119,22 +108,27 @@ public final class SshPublicKey
 	/**
 	 * Looks up SSH keys by their name.
 	 *
-	 * @param scope the client configuration
-	 * @param name  the name of the public key
+	 * @param client the client configuration
+	 * @param name   the name of the public key
 	 * @return an empty list if no match was found
-	 * @throws IOException          if an I/O error occurs. These errors are typically transient, and retrying
-	 *                              the request may resolve the issue.
-	 * @throws TimeoutException     if the request times out before receiving a response. This might indicate
-	 *                              network latency or server overload.
-	 * @throws InterruptedException if the thread is interrupted while waiting for a response. This can happen
-	 *                              due to shutdown signals.
+	 * @throws NullPointerException     if any of the arguments are null
+	 * @throws IllegalArgumentException if {@code name} contains leading or trailing whitespace or is empty
+	 * @throws IllegalStateException    if the client is closed
+	 * @throws IOException              if an I/O error occurs. These errors are typically transient, and
+	 *                                  retrying the request may resolve the issue.
+	 * @throws TimeoutException         if the request times out before receiving a response. This might
+	 *                                  indicate network latency or server overload.
+	 * @throws InterruptedException     if the thread is interrupted while waiting for a response. This can
+	 *                                  happen due to shutdown signals.
 	 */
-	public static List<SshPublicKey> getByName(DigitalOceanScope scope, String name)
+	public static List<SshPublicKey> getByName(DigitalOceanClient client, String name)
 		throws IOException, TimeoutException, InterruptedException
 	{
+		requireThat(name, "name").isStripped().isNotEmpty();
+
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/sshKeys_list
 		String uri = REST_SERVER + "/v2/account/keys";
-		return DigitalOceans.getElements(scope, uri, Map.of(), body ->
+		return DigitalOceans.getElements(client, uri, Map.of(), body ->
 		{
 			JsonNode sshKeys = body.get("ssh_keys");
 			if (sshKeys == null)
@@ -144,7 +138,7 @@ public final class SshPublicKey
 			{
 				String actualName = sshKey.get("name").textValue();
 				if (actualName.equals(name))
-					matches.add(getByJson(scope, sshKey));
+					matches.add(getByJson(client, sshKey));
 			}
 			return matches;
 		});
@@ -153,7 +147,7 @@ public final class SshPublicKey
 	/**
 	 * Looks up an SSH key by its fingerprint.
 	 *
-	 * @param scope       the client configuration
+	 * @param client      the client configuration
 	 * @param fingerprint the fingerprint of the public key
 	 * @return null if no match was found
 	 * @throws IllegalArgumentException if:
@@ -161,6 +155,10 @@ public final class SshPublicKey
 	 *                                    <li>{@code fingerprint} contains leading or trailing whitespace or is
 	 *                                    empty.</li>
 	 *                                  </ul>
+	 * @throws NullPointerException     if any of the arguments are null
+	 * @throws IllegalArgumentException if {@code fingerprint} contains leading or trailing whitespace or is
+	 *                                  empty
+	 * @throws IllegalStateException    if the client is closed
 	 * @throws IOException              if an I/O error occurs. These errors are typically transient, and
 	 *                                  retrying the request may resolve the issue.
 	 * @throws TimeoutException         if the request times out before receiving a response. This might
@@ -168,14 +166,14 @@ public final class SshPublicKey
 	 * @throws InterruptedException     if the thread is interrupted while waiting for a response. This can
 	 *                                  happen due to shutdown signals.
 	 */
-	public static SshPublicKey getByFingerprint(DigitalOceanScope scope, String fingerprint)
+	public static SshPublicKey getByFingerprint(DigitalOceanClient client, String fingerprint)
 		throws IOException, TimeoutException, InterruptedException
 	{
 		requireThat(fingerprint, "fingerprint").isStripped().isNotEmpty();
 
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/sshKeys_list
 		String uri = REST_SERVER + "/v2/account/keys";
-		return DigitalOceans.getElement(scope, uri, Map.of(), body ->
+		return DigitalOceans.getElement(client, uri, Map.of(), body ->
 		{
 			JsonNode sshKeys = body.get("ssh_keys");
 			if (sshKeys == null)
@@ -184,85 +182,28 @@ public final class SshPublicKey
 			{
 				String actualFingerprint = sshKey.get("fingerprint").textValue();
 				if (actualFingerprint.equals(fingerprint))
-					return getByJson(scope, sshKey);
+					return getByJson(client, sshKey);
 			}
 			return null;
 		});
 	}
 
 	/**
-	 * Returns an existing public key with the same fingerprint as the provided key, or creates a new public key
-	 * if no matching key exists.
-	 * <p>
-	 * <b>WARNING</b>: Any keys with the same name but a different state will be deleted before the new
-	 * key is created.
-	 *
-	 * @param scope the client configuration
-	 * @param name  the name of the public key
-	 * @param value the public key
-	 * @return the new or existing public key
-	 * @throws IllegalArgumentException if:
-	 *                                  <ul>
-	 *                                    <li>any of the arguments contain leading or trailing whitespace or
-	 *                                    are empty.</li>
-	 *                                    <li>another SSH key with the same fingerprint already exists.</li>
-	 *                                  </ul>
-	 * @throws GeneralSecurityException if the key is unsupported or invalid
-	 * @throws IOException              if an I/O error occurs. These errors are typically transient, and
-	 *                                  retrying the request may resolve the issue.
-	 * @throws TimeoutException         if the request times out before receiving a response. This might
-	 *                                  indicate network latency or server overload.
-	 * @throws InterruptedException     if the thread is interrupted while waiting for a response. This can
-	 *                                  happen due to shutdown signals.
-	 */
-	public static CreateResult<SshPublicKey> getOrCreate(DigitalOceanScope scope, String name, PublicKey value)
-		throws GeneralSecurityException, IOException, TimeoutException, InterruptedException
-	{
-		requireThat(name, "name").isStripped().isNotEmpty();
-		requireThat(value, "value").isNotNull();
-
-		MessageDigest md5 = MessageDigest.getInstance("MD5");
-		String fingerprint = getFingerprint(value, md5);
-
-		SshPublicKey existingKey = null;
-		List<SshPublicKey> keys = getByName(scope, name);
-		List<SshPublicKey> keysToDelete = new ArrayList<>();
-		for (SshPublicKey key : keys)
-		{
-			if (key.getFingerprint().equals(fingerprint))
-				existingKey = key;
-			else
-				keysToDelete.add(key);
-		}
-		keys.removeAll(keysToDelete);
-		for (SshPublicKey key : keysToDelete)
-			key.destroy();
-
-		if (existingKey == null)
-			existingKey = getByFingerprint(scope, fingerprint);
-		if (existingKey == null)
-		{
-			SshPublicKey sshKey = create(scope, name, value);
-			return CreateResult.created(sshKey);
-		}
-		return CreateResult.conflictedWith(existingKey);
-	}
-
-	/**
 	 * Returns the fingerprint of a key.
 	 *
-	 * @param value a key
-	 * @param type  the type of hash to use for generating the fingerprint
+	 * @param value  a key
+	 * @param digest the digest to use for generating the fingerprint
 	 * @return the fingerprint of the key
+	 * @throws NullPointerException     if any of the arguments are null
 	 * @throws GeneralSecurityException if the key is unsupported or invalid
 	 */
-	private static String getFingerprint(PublicKey value, MessageDigest type) throws GeneralSecurityException
+	private static String getFingerprint(PublicKey value, MessageDigest digest) throws GeneralSecurityException
 	{
 		SshKeys sshKeys = new SshKeys();
 		String fingerprint;
 		try (ByteArrayOutputStream out = new ByteArrayOutputStream())
 		{
-			sshKeys.writeFingerprint(value, type, out);
+			sshKeys.writeFingerprint(value, digest, out);
 			fingerprint = out.toString();
 		}
 		catch (IOException e)
@@ -278,19 +219,25 @@ public final class SshPublicKey
 	}
 
 	/**
-	 * Creates a new SSH key.
+	 * Returns an existing public key with the same fingerprint as the provided key, or creates a new public key
+	 * if no matching key exists.
+	 * <p>
+	 * <b>WARNING</b>: Any keys with the same name but a different state will be deleted before the new
+	 * key is created.
 	 *
-	 * @param scope the client configuration
-	 * @param name  the name of the public key
-	 * @param value the value of the public key
-	 * @return a new public key
-	 * @throws NullPointerException     if any of the arguments are null
+	 * @param client the client configuration
+	 * @param name   the name of the public key
+	 * @param value  the public key
+	 * @return the new or existing public key
 	 * @throws IllegalArgumentException if:
 	 *                                  <ul>
 	 *                                    <li>any of the arguments contain leading or trailing whitespace or
 	 *                                    are empty.</li>
 	 *                                    <li>another SSH key with the same fingerprint already exists.</li>
 	 *                                  </ul>
+	 * @throws NullPointerException     if any of the arguments are null
+	 * @throws IllegalArgumentException if {@code name} contains leading or trailing whitespace or is empty
+	 * @throws IllegalStateException    if the client is closed
 	 * @throws GeneralSecurityException if the key is unsupported or invalid
 	 * @throws IOException              if an I/O error occurs. These errors are typically transient, and
 	 *                                  retrying the request may resolve the issue.
@@ -299,14 +246,72 @@ public final class SshPublicKey
 	 * @throws InterruptedException     if the thread is interrupted while waiting for a response. This can
 	 *                                  happen due to shutdown signals.
 	 */
-	public static SshPublicKey create(DigitalOceanScope scope, String name, PublicKey value)
+	public static CreateResult<SshPublicKey> getOrCreate(DigitalOceanClient client, String name,
+		PublicKey value) throws GeneralSecurityException, IOException, TimeoutException, InterruptedException
+	{
+		requireThat(name, "name").isStripped().isNotEmpty();
+		requireThat(value, "value").isNotNull();
+
+		MessageDigest md5 = MessageDigest.getInstance("MD5");
+		String fingerprint = getFingerprint(value, md5);
+
+		SshPublicKey existingKey = null;
+		List<SshPublicKey> keys = getByName(client, name);
+		List<SshPublicKey> keysToDelete = new ArrayList<>();
+		for (SshPublicKey key : keys)
+		{
+			if (key.getFingerprint().equals(fingerprint))
+				existingKey = key;
+			else
+				keysToDelete.add(key);
+		}
+		keys.removeAll(keysToDelete);
+		for (SshPublicKey key : keysToDelete)
+			key.destroy();
+
+		if (existingKey == null)
+			existingKey = getByFingerprint(client, fingerprint);
+		if (existingKey == null)
+		{
+			SshPublicKey sshKey = create(client, name, value);
+			return CreateResult.created(sshKey);
+		}
+		return CreateResult.conflictedWith(existingKey);
+	}
+
+	/**
+	 * Creates a new SSH key.
+	 *
+	 * @param client the client configuration
+	 * @param name   the name of the public key
+	 * @param value  the value of the public key
+	 * @return a new public key
+	 * @throws NullPointerException     if any of the arguments are null
+	 * @throws IllegalArgumentException if:
+	 *                                  <ul>
+	 *                                    <li>any of the arguments contain leading or trailing whitespace or
+	 *                                    are empty.</li>
+	 *                                    <li>another SSH key with the same fingerprint already exists.</li>
+	 *                                  </ul>
+	 * @throws NullPointerException     if any of the arguments are null
+	 * @throws IllegalArgumentException if {@code name} contains leading or trailing whitespace or is empty
+	 * @throws IllegalStateException    if the client is closed
+	 * @throws GeneralSecurityException if the key is unsupported or invalid
+	 * @throws IOException              if an I/O error occurs. These errors are typically transient, and
+	 *                                  retrying the request may resolve the issue.
+	 * @throws TimeoutException         if the request times out before receiving a response. This might
+	 *                                  indicate network latency or server overload.
+	 * @throws InterruptedException     if the thread is interrupted while waiting for a response. This can
+	 *                                  happen due to shutdown signals.
+	 */
+	public static SshPublicKey create(DigitalOceanClient client, String name, PublicKey value)
 		throws GeneralSecurityException, IOException, TimeoutException, InterruptedException
 	{
 		requireThat(name, "name").isStripped().isNotEmpty();
 		requireThat(value, "value").isNotNull();
 
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/sshKeys_create
-		ObjectMapper om = scope.getObjectMapper();
+		ObjectMapper om = client.getObjectMapper();
 		SshKeys sshKeys = new SshKeys();
 		String openSshRepresentation;
 		try (ByteArrayOutputStream out = new ByteArrayOutputStream())
@@ -325,9 +330,9 @@ public final class SshPublicKey
 			put("public_key", openSshRepresentation);
 
 		String uri = REST_SERVER + "/v2/account/keys";
-		Request request = DigitalOceans.createRequest(scope, uri, requestBody).
+		Request request = DigitalOceans.createRequest(client, uri, requestBody).
 			method(POST);
-		ClientRequests clientRequests = scope.getClientRequests();
+		ClientRequests clientRequests = client.getClientRequests();
 		ContentResponse serverResponse = clientRequests.send(request);
 		switch (serverResponse.getStatus())
 		{
@@ -339,7 +344,7 @@ public final class SshPublicKey
 				"Unexpected response: " + clientRequests.toString(serverResponse) + "\n" +
 					"Request: " + clientRequests.toString(request));
 		}
-		JsonNode body = DigitalOceans.getResponseBody(scope, serverResponse);
+		JsonNode body = DigitalOceans.getResponseBody(client, serverResponse);
 		JsonNode responseId = body.get("id");
 		if (responseId != null && responseId.textValue().equals("unprocessable_entity"))
 		{
@@ -356,10 +361,24 @@ public final class SshPublicKey
 
 		MessageDigest md5 = MessageDigest.getInstance("MD5");
 		String fingerprint = getFingerprint(value, md5);
-		return new SshPublicKey(scope, id, name, fingerprint);
+		return new SshPublicKey(client, id, name, fingerprint);
 	}
 
-	private final DigitalOceanScope scope;
+	/**
+	 * @param client the client configuration
+	 * @param json   the JSON representation of the key
+	 * @return the key
+	 * @throws NullPointerException if any of the arguments are null
+	 */
+	private static SshPublicKey getByJson(DigitalOceanClient client, JsonNode json)
+	{
+		int id = DigitalOceans.toInt(json, "id");
+		String name = json.get("name").textValue();
+		String fingerprint = json.get("fingerprint").textValue();
+		return new SshPublicKey(client, id, name, fingerprint);
+	}
+
+	private final DigitalOceanClient client;
 	private final int id;
 	private final String name;
 	private final String fingerprint;
@@ -367,7 +386,7 @@ public final class SshPublicKey
 	/**
 	 * Creates a new public key.
 	 *
-	 * @param scope       the client configuration
+	 * @param client      the client configuration
 	 * @param id          the ID of the key
 	 * @param name        the name of the key
 	 * @param fingerprint the fingerprint of the key
@@ -375,12 +394,12 @@ public final class SshPublicKey
 	 * @throws IllegalArgumentException if any of the arguments contain leading or trailing whitespace or are
 	 *                                  empty
 	 */
-	private SshPublicKey(DigitalOceanScope scope, int id, String name, String fingerprint)
+	private SshPublicKey(DigitalOceanClient client, int id, String name, String fingerprint)
 	{
-		requireThat(scope, "scope").isNotNull();
+		requireThat(client, "client").isNotNull();
 		requireThat(name, "name").isStripped().isNotEmpty();
 		requireThat(fingerprint, "fingerprint").isStripped().isNotEmpty();
-		this.scope = scope;
+		this.client = client;
 		this.id = id;
 		this.name = name;
 		this.fingerprint = fingerprint;
@@ -389,24 +408,25 @@ public final class SshPublicKey
 	/**
 	 * Destroys the SSH key.
 	 *
-	 * @throws IOException          if an I/O error occurs. These errors are typically transient, and retrying
-	 *                              the request may resolve the issue.
-	 * @throws TimeoutException     if the request times out before receiving a response. This might indicate
-	 *                              network latency or server overload.
-	 * @throws InterruptedException if the thread is interrupted while waiting for a response. This can happen
-	 *                              due to shutdown signals.
+	 * @throws IllegalStateException if the client is closed
+	 * @throws IOException           if an I/O error occurs. These errors are typically transient, and retrying
+	 *                               the request may resolve the issue.
+	 * @throws TimeoutException      if the request times out before receiving a response. This might indicate
+	 *                               network latency or server overload.
+	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
+	 *                               due to shutdown signals.
 	 */
 	public void destroy() throws IOException, TimeoutException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/sshKeys_delete
 		@SuppressWarnings("PMD.CloseResource")
-		HttpClient client = scope.getHttpClient();
+		HttpClient httpClient = client.getHttpClient();
 		String uri = REST_SERVER + "/v2/account/keys/" + id;
-		ClientRequests clientRequests = scope.getClientRequests();
-		Request request = client.newRequest(uri).
+		ClientRequests clientRequests = client.getClientRequests();
+		Request request = httpClient.newRequest(uri).
 			method(DELETE).
 			headers(headers -> headers.put("Content-Type", "application/json").
-				put("Authorization", "Bearer " + scope.getDigitalOceanToken()));
+				put("Authorization", "Bearer " + client.getAccessToken()));
 		ContentResponse serverResponse = clientRequests.send(request);
 		switch (serverResponse.getStatus())
 		{

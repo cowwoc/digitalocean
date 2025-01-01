@@ -1,9 +1,9 @@
 package com.github.cowwoc.digitalocean.resource;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.github.cowwoc.digitalocean.client.DigitalOceanClient;
 import com.github.cowwoc.digitalocean.internal.util.DigitalOceans;
 import com.github.cowwoc.digitalocean.internal.util.ToStringBuilder;
-import com.github.cowwoc.digitalocean.scope.DigitalOceanScope;
 import org.eclipse.jetty.client.ContentResponse;
 import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.http.HttpMethod;
@@ -16,7 +16,7 @@ import static com.github.cowwoc.digitalocean.internal.util.DigitalOceans.REST_SE
 import static com.github.cowwoc.requirements10.java.DefaultJavaValidators.requireThat;
 
 /**
- * The operating system image that was used to boot this droplet.
+ * The system image that was used to boot droplets.
  */
 public final class DropletImage
 {
@@ -24,7 +24,7 @@ public final class DropletImage
 	private final String slug;
 
 	/**
-	 * Creates a new droplet.
+	 * Creates a new image.
 	 *
 	 * @param id   the id of the image
 	 * @param slug the slug of the image
@@ -62,12 +62,12 @@ public final class DropletImage
 	/**
 	 * Looks up an image by its slug.
 	 *
-	 * @param scope the client configuration
-	 * @param slug  a slug
+	 * @param client the client configuration
+	 * @param slug   a slug
 	 * @return null if no match is found
 	 * @throws NullPointerException     if any of the arguments are null
-	 * @throws IllegalArgumentException if any of the arguments contain leading or trailing whitespace or are
-	 *                                  empty
+	 * @throws IllegalArgumentException if {@code slug} contains leading or trailing whitespace or is empty
+	 * @throws IllegalStateException    if the client is closed
 	 * @throws IOException              if an I/O error occurs. These errors are typically transient, and
 	 *                                  retrying the request may resolve the issue.
 	 * @throws TimeoutException         if the request times out before receiving a response. This might
@@ -75,20 +75,20 @@ public final class DropletImage
 	 * @throws InterruptedException     if the thread is interrupted while waiting for a response. This can
 	 *                                  happen due to shutdown signals.
 	 */
-	public static DropletImage getBySlug(DigitalOceanScope scope, String slug)
+	public static DropletImage getBySlug(DigitalOceanClient client, String slug)
 		throws IOException, TimeoutException, InterruptedException
 	{
 		requireThat(slug, "slug").isStripped().isNotEmpty();
 
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/images_get
 		@SuppressWarnings("PMD.CloseResource")
-		HttpClient client = scope.getHttpClient();
+		HttpClient httpClient = client.getHttpClient();
 		String uri = REST_SERVER + "/v2/images/" + slug;
-		ContentResponse serverResponse = scope.getClientRequests().send(client.newRequest(uri).
+		ContentResponse serverResponse = client.getClientRequests().send(httpClient.newRequest(uri).
 			method(HttpMethod.GET).
 			headers(headers -> headers.put("Content-Type", "application/json").
-				put("Authorization", "Bearer " + scope.getDigitalOceanToken())));
-		JsonNode body = DigitalOceans.getResponseBody(scope, serverResponse);
+				put("Authorization", "Bearer " + client.getAccessToken())));
+		JsonNode body = DigitalOceans.getResponseBody(client, serverResponse);
 		JsonNode image = body.get("image");
 		int id = DigitalOceans.toInt(image, "id");
 		return new DropletImage(id, slug);

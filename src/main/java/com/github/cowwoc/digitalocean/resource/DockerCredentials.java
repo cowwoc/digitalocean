@@ -21,8 +21,9 @@ public record DockerCredentials(String username, String password)
 	 *
 	 * @param username the username
 	 * @param password the password
-	 * @throws NullPointerException if any of the arguments are null
-	 * @throws NullPointerException if any of the arguments contain leading or trailing whitespace or are empty
+	 * @throws NullPointerException     if any of the arguments are null
+	 * @throws IllegalArgumentException if any of the arguments contain leading or trailing whitespace or are
+	 *                                  empty
 	 */
 	public DockerCredentials
 	{

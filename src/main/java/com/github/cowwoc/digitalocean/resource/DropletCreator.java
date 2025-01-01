@@ -4,11 +4,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.github.cowwoc.digitalocean.client.DigitalOceanClient;
 import com.github.cowwoc.digitalocean.exception.PermissionDeniedException;
 import com.github.cowwoc.digitalocean.internal.util.ClientRequests;
 import com.github.cowwoc.digitalocean.internal.util.DigitalOceans;
 import com.github.cowwoc.digitalocean.internal.util.ToStringBuilder;
-import com.github.cowwoc.digitalocean.scope.DigitalOceanScope;
 import org.eclipse.jetty.client.ContentResponse;
 import org.eclipse.jetty.client.Request;
 
@@ -28,11 +28,11 @@ import static org.eclipse.jetty.http.HttpStatus.ACCEPTED_202;
 import static org.eclipse.jetty.http.HttpStatus.UNPROCESSABLE_ENTITY_422;
 
 /**
- * The specification of a new droplet.
+ * Creates a new droplet.
  */
-public final class DropletBuilder
+public final class DropletCreator
 {
-	private final DigitalOceanScope scope;
+	private final DigitalOceanClient client;
 	private final String name;
 	private final DropletType type;
 	private final DropletImage image;
@@ -44,14 +44,14 @@ public final class DropletBuilder
 	private String userData = "";
 
 	/**
-	 * Creates a new DropletBuilder.
+	 * Creates a new instance.
 	 *
-	 * @param scope the client configuration
-	 * @param name  the name of the droplet. Names are case-insensitive.
-	 * @param type  the machine type of the droplet
-	 * @param image the image ID of a public or private image or the slug identifier for a public image that
-	 *              will be used to boot this droplet
-	 * @param vpc   the VPC to which the droplet will be assigned
+	 * @param client the client configuration
+	 * @param name   the name of the droplet. Names are case-insensitive.
+	 * @param type   the machine type of the droplet
+	 * @param image  the image ID of a public or private image or the slug identifier for a public image that
+	 *               will be used to boot this droplet
+	 * @param vpc    the VPC to which the droplet will be assigned
 	 * @throws NullPointerException     if any of the arguments are null
 	 * @throws IllegalArgumentException if:
 	 *                                  <ul>
@@ -62,17 +62,17 @@ public final class DropletBuilder
 	 *                                    <li>any of the arguments contain leading or trailing whitespace or
 	 *                                    are empty.</li>
 	 *                                  </ul>
-	 * @see Vpc#getDefault(DigitalOceanScope, Zone)
+	 * @see Vpc#getDefault(DigitalOceanClient, Zone)
 	 */
-	DropletBuilder(DigitalOceanScope scope, String name, DropletType type, DropletImage image, Vpc vpc)
+	public DropletCreator(DigitalOceanClient client, String name, DropletType type, DropletImage image, Vpc vpc)
 	{
-		requireThat(scope, "scope").isNotNull();
+		requireThat(client, "client").isNotNull();
 		// Taken from https://docs.digitalocean.com/reference/api/api-reference/#operation/droplets_create
 		requireThat(name, "name").matches("^[a-zA-Z0-9]?[a-z0-9A-Z.\\-]*[a-z0-9A-Z]$");
 		requireThat(type, "type").isNotNull();
 		requireThat(image, "image").isNotNull();
 		requireThat(vpc, "vpc").isNotNull();
-		this.scope = scope;
+		this.client = client;
 		this.name = name;
 		this.type = type;
 		this.image = image;
@@ -127,7 +127,7 @@ public final class DropletBuilder
 	 * @return this
 	 * @throws NullPointerException if {@code zone} is null
 	 */
-	public DropletBuilder zone(Zone zone)
+	public DropletCreator zone(Zone zone)
 	{
 		requireThat(zone, "zone").isNotNull();
 		this.zone = zone;
@@ -150,7 +150,7 @@ public final class DropletBuilder
 	 * @param key a public key
 	 * @return this
 	 */
-	public DropletBuilder sshKey(SshPublicKey key)
+	public DropletCreator sshKey(SshPublicKey key)
 	{
 		sshKeys.add(key);
 		return this;
@@ -173,7 +173,7 @@ public final class DropletBuilder
 	 * @return this
 	 * @throws NullPointerException if {@code feature} is null
 	 */
-	public DropletBuilder feature(DropletFeature feature)
+	public DropletCreator feature(DropletFeature feature)
 	{
 		requireThat(feature, "feature").isNotNull();
 		this.features.add(feature);
@@ -188,7 +188,7 @@ public final class DropletBuilder
 	 * @throws NullPointerException     if {@code features} is null
 	 * @throws IllegalArgumentException if any of the features are null
 	 */
-	public DropletBuilder features(Collection<DropletFeature> features)
+	public DropletCreator features(Collection<DropletFeature> features)
 	{
 		requireThat(features, "features").isNotNull().doesNotContain(null);
 		this.features.addAll(features);
@@ -218,7 +218,7 @@ public final class DropletBuilder
 	 *                                    <li>is longer than 255 characters.</li>
 	 *                                  </ul>
 	 */
-	public DropletBuilder tag(String tag)
+	public DropletCreator tag(String tag)
 	{
 		// Discovered empirically: DigitalOcean drops all tags silently if any of them contain invalid characters.
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/tags_create
@@ -241,7 +241,7 @@ public final class DropletBuilder
 	 *                                    <li>is longer than 255 characters.</li>
 	 *                                  </ul>
 	 */
-	public DropletBuilder tags(Collection<String> tags)
+	public DropletCreator tags(Collection<String> tags)
 	{
 		requireThat(tags, "tags").isNotNull().doesNotContain(null);
 		for (String tag : tags)
@@ -277,7 +277,7 @@ public final class DropletBuilder
 	 *                                    <li>is longer than 64 KiB characters.</li>
 	 *                                  </ul>
 	 */
-	public DropletBuilder userData(String userData)
+	public DropletCreator userData(String userData)
 	{
 		requireThat(userData, "userData").isStripped().isNotEmpty().length().isLessThanOrEqualTo(64 * 1024);
 		this.userData = userData;
@@ -299,6 +299,7 @@ public final class DropletBuilder
 	 * Creates a new droplet.
 	 *
 	 * @return the new droplet
+	 * @throws IllegalStateException     if the client is closed
 	 * @throws PermissionDeniedException if the request exceeded the client's droplet limit
 	 * @throws IOException               if an I/O error occurs. These errors are typically transient, and
 	 *                                   retrying the request may resolve the issue.
@@ -311,7 +312,7 @@ public final class DropletBuilder
 		throws PermissionDeniedException, IOException, TimeoutException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/droplets_create
-		ObjectMapper om = scope.getObjectMapper();
+		ObjectMapper om = client.getObjectMapper();
 		ObjectNode requestBody = om.createObjectNode().
 			put("name", name).
 			put("size", type.toString()).
@@ -349,9 +350,9 @@ public final class DropletBuilder
 			requestBody.put("user_data", userData);
 
 		String uri = REST_SERVER + "/v2/droplets";
-		Request request = DigitalOceans.createRequest(scope, uri, requestBody).
+		Request request = DigitalOceans.createRequest(client, uri, requestBody).
 			method(POST);
-		ClientRequests clientRequests = scope.getClientRequests();
+		ClientRequests clientRequests = client.getClientRequests();
 		ContentResponse serverResponse = clientRequests.send(request);
 		String responseAsString = serverResponse.getContentAsString();
 		switch (serverResponse.getStatus())
@@ -363,21 +364,21 @@ public final class DropletBuilder
 			case UNPROCESSABLE_ENTITY_422 ->
 			{
 				// Example: creating this/these droplet(s) will exceed your droplet limit
-				JsonNode json = DigitalOceans.getResponseBody(scope, serverResponse);
+				JsonNode json = DigitalOceans.getResponseBody(client, serverResponse);
 				throw new PermissionDeniedException(json.get("message").textValue());
 			}
 			default -> throw new AssertionError("Unexpected response: " +
 				clientRequests.toString(serverResponse) + "\n" +
 				"Request: " + clientRequests.toString(request));
 		}
-		JsonNode body = scope.getObjectMapper().readTree(responseAsString);
+		JsonNode body = client.getObjectMapper().readTree(responseAsString);
 		JsonNode dropletNode = body.get("droplet");
 		if (dropletNode == null)
 		{
 			throw new AssertionError("Unexpected response: " + clientRequests.toString(serverResponse) + "\n" +
 				"Request: " + clientRequests.toString(request));
 		}
-		return Droplet.getByJson(scope, dropletNode);
+		return Droplet.getByJson(client, dropletNode);
 	}
 
 //	/**
@@ -435,7 +436,7 @@ public final class DropletBuilder
 	@Override
 	public String toString()
 	{
-		return new ToStringBuilder(DropletBuilder.class).
+		return new ToStringBuilder(DropletCreator.class).
 			add("name", name).
 			add("type", type).
 			add("image", image).
