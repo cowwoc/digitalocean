@@ -2,6 +2,10 @@ Minor updates involving cosmetic changes have been omitted from this list.
 
 See https://github.com/cowwoc/digitalocean/commits/main for a full list.
 
+## Version 0.7 - 2025/01/01
+
+* Increased the logging frequency of `Cluster.waitFor()`.
+
 ## Version 0.6 - 2025/01/01
 
 * Renamed `Cluster.get()` to `Cluster.getByZone()`.

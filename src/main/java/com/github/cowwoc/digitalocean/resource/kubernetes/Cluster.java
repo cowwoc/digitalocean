@@ -54,6 +54,11 @@ import static org.eclipse.jetty.http.HttpStatus.OK_200;
 public final class Cluster
 {
 	static final DateTimeFormatter HOUR_MINUTE = DateTimeFormatter.ofPattern("H:mm");
+	/**
+	 * Defines the frequency at which it is acceptable to log the same message to indicate that the thread is
+	 * still active. This helps in monitoring the progress and ensuring the thread has not become unresponsive.
+	 */
+	private static final Duration PROGRESS_FREQUENCY = Duration.ofSeconds(2);
 
 	/**
 	 * Creates a new cluster configuration.
@@ -617,6 +622,7 @@ public final class Cluster
 			method(GET);
 		RetryDelay retryDelay = new RetryDelay(Duration.ofSeconds(3), Duration.ofSeconds(30), 2);
 		TimeLimit timeLimit = new TimeLimit(timeout);
+		Instant timeOfLastStatus = Instant.MIN;
 		while (true)
 		{
 			ContentResponse serverResponse = clientRequests.send(request);
@@ -634,10 +640,20 @@ public final class Cluster
 			JsonNode body = DigitalOceans.getResponseBody(client, serverResponse);
 			Cluster newCluster = getByJson(client, body.get("kubernetes_cluster"));
 			if (newCluster.getStatus().state.equals(state))
+			{
+				if (timeOfLastStatus != Instant.MIN)
+					log.info("The status of {} is {}", name, state);
 				return newCluster;
+			}
 			if (!timeLimit.getTimeLeft().isPositive())
 				throw new TimeoutException("Operation failed after " + timeLimit.getTimeQuota());
-			log.info("Waiting for the status of {} to change from {} to {}", name, newCluster.status.state, state);
+			Instant now = Instant.now();
+			if (Duration.between(timeOfLastStatus, now).compareTo(PROGRESS_FREQUENCY) >= 0)
+			{
+				log.info("Waiting for the status of {} to change from {} to {}", name, newCluster.status.state,
+					state);
+				timeOfLastStatus = now;
+			}
 			retryDelay.sleep();
 		}
 	}
