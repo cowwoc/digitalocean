@@ -4,6 +4,7 @@ import org.eclipse.jetty.client.BytesRequestContent;
 import org.eclipse.jetty.client.ContentResponse;
 import org.eclipse.jetty.client.Request;
 import org.eclipse.jetty.client.Request.Content;
+import org.eclipse.jetty.client.Response;
 import org.eclipse.jetty.http.HttpField;
 import org.eclipse.jetty.http.HttpFields;
 import org.eclipse.jetty.http.HttpStatus;
@@ -174,7 +175,7 @@ public final class ClientRequests
 	 * @param response the server response
 	 * @return the response HTTP version, status code and reason phrase
 	 */
-	public String getStatusLine(ContentResponse response)
+	public String getStatusLine(Response response)
 	{
 		String reason = response.getReason();
 		if (reason == null)
@@ -189,7 +190,7 @@ public final class ClientRequests
 	 * @param response the server response
 	 * @return the string representation of the response's headers
 	 */
-	private String getHeadersAsString(ContentResponse response)
+	private String getHeadersAsString(Response response)
 	{
 		StringJoiner result = new StringJoiner("\n");
 		for (HttpField header : response.getHeaders())
@@ -201,17 +202,20 @@ public final class ClientRequests
 	 * @param response the server response
 	 * @return the {@code String} representation of the response
 	 */
-	public String toString(ContentResponse response)
+	public String toString(Response response)
 	{
 		requireThat(response, "response").isNotNull();
 		StringJoiner resultAsString = new StringJoiner("\n");
 		resultAsString.add(getStatusLine(response)).
 			add(getHeadersAsString(response));
-		String responseBody = response.getContentAsString();
-		if (!responseBody.isEmpty())
+		if (response instanceof ContentResponse contentResponse)
 		{
-			resultAsString.add("");
-			resultAsString.add(responseBody);
+			String responseBody = contentResponse.getContentAsString();
+			if (!responseBody.isEmpty())
+			{
+				resultAsString.add("");
+				resultAsString.add(responseBody);
+			}
 		}
 		return resultAsString.toString();
 	}
