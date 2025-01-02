@@ -3,7 +3,7 @@
 
 # <img src="docs/logo.svg" width=64 height=64 alt="logo"> DigitalOcean Java Client
 
-[![API](https://img.shields.io/badge/api_docs-5B45D5.svg)](https://cowwoc.github.io/digitalocean/0.7/)
+[![API](https://img.shields.io/badge/api_docs-5B45D5.svg)](https://cowwoc.github.io/digitalocean/0.8/)
 [![Changelog](https://img.shields.io/badge/changelog-A345D5.svg)](docs/changelog.md)
 
 A Java client for the [DigitalOcean](https://www.digitalocean.com/) cloud platform.
@@ -15,7 +15,7 @@ To get started, add this Maven dependency:
 <dependency>
   <groupId>com.github.cowwoc.digitalocean</groupId>
   <artifactId>digitalocean</artifactId>
-  <version>0.7</version>
+  <version>0.8</version>
 </dependency>
 ```
 
@@ -54,7 +54,7 @@ class Example
 
 ## Getting Started
 
-See the [API documentation](https://cowwoc.github.io/digitalocean/0.7/) for more details.
+See the [API documentation](https://cowwoc.github.io/digitalocean/0.8/) for more details.
 
 ## Licenses
 

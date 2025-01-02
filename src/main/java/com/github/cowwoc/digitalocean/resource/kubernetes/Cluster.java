@@ -618,13 +618,13 @@ public final class Cluster
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/kubernetes_get_cluster
 		ClientRequests clientRequests = client.getClientRequests();
 		String uri = REST_SERVER + "/v2/kubernetes/clusters/" + id;
-		Request request = DigitalOceans.createRequest(client, uri).
-			method(GET);
 		RetryDelay retryDelay = new RetryDelay(Duration.ofSeconds(3), Duration.ofSeconds(30), 2);
 		TimeLimit timeLimit = new TimeLimit(timeout);
 		Instant timeOfLastStatus = Instant.MIN;
 		while (true)
 		{
+			Request request = DigitalOceans.createRequest(client, uri).
+				method(GET);
 			ContentResponse serverResponse = clientRequests.send(request);
 			switch (serverResponse.getStatus())
 			{

@@ -2,6 +2,10 @@ Minor updates involving cosmetic changes have been omitted from this list.
 
 See https://github.com/cowwoc/digitalocean/commits/main for a full list.
 
+## Version 0.8 - 2025/01/01
+
+* Fixed bug that caused `Cluster.waitFor()` to hang. 
+
 ## Version 0.7 - 2025/01/01
 
 * Increased the logging frequency of `Cluster.waitFor()`.
