@@ -2,18 +2,18 @@ package com.github.cowwoc.digitalocean.resource;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.github.cowwoc.digitalocean.client.DigitalOceanClient;
-import com.github.cowwoc.digitalocean.internal.util.ClientRequests;
-import com.github.cowwoc.digitalocean.internal.util.DigitalOceans;
 import org.eclipse.jetty.client.ContentResponse;
-import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.HttpResponseException;
 import org.eclipse.jetty.client.Request;
 
 import java.io.IOException;
+import java.net.URI;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
 
+import static com.github.cowwoc.digitalocean.internal.client.MainDigitalOceanClient.REST_SERVER;
 import static com.github.cowwoc.requirements10.java.DefaultJavaValidators.requireThat;
 import static org.eclipse.jetty.http.HttpMethod.DELETE;
 import static org.eclipse.jetty.http.HttpStatus.NOT_FOUND_404;
@@ -27,12 +27,14 @@ import static org.eclipse.jetty.http.HttpStatus.UNAUTHORIZED_401;
 public final class DockerImage
 {
 	/**
+	 * Parses the JSON representation of this class.
+	 *
 	 * @param client     the client configuration
 	 * @param repository the enclosing docker repository
-	 * @param json       the JSON representation of the image
-	 * @return the image
-	 * @throws NullPointerException  if any of the arguments are null
-	 * @throws IllegalStateException if the client is closed
+	 * @param json       the JSON representation
+	 * @return the docker image
+	 * @throws NullPointerException     if any of the arguments are null
+	 * @throws IllegalArgumentException if the server response could not be parsed
 	 */
 	static DockerImage getByJson(DigitalOceanClient client, DockerRepository repository, JsonNode json)
 	{
@@ -65,7 +67,8 @@ public final class DockerImage
 	 * @param tags       the tags that are associated with the image
 	 * @param layers     the layers that the image consists of
 	 * @throws NullPointerException     if any of the arguments are null
-	 * @throws IllegalArgumentException if {@code name} contains leading or trailing whitespace or is empty
+	 * @throws IllegalArgumentException if any of the arguments contain leading or trailing whitespace or are
+	 *                                  empty
 	 */
 	public DockerImage(DigitalOceanClient client, DockerRepository repository, String digest, Set<String> tags,
 		Set<Layer> layers)
@@ -128,17 +131,12 @@ public final class DockerImage
 	public void destroy(DockerRepository repository) throws IOException, TimeoutException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/registry_delete_repositoryManifest
-		@SuppressWarnings("PMD.CloseResource")
-		HttpClient httpClient = client.getHttpClient();
-		ClientRequests clientRequests = client.getClientRequests();
 		DockerRegistry registry = repository.getRegistry();
-		String uri = DigitalOceans.REST_SERVER + "/v2/registry/" + registry.getName() + "/repositories/" +
-			repository.getName() + "/digests/" + digest;
-		Request request = httpClient.newRequest(uri).
-			method(DELETE).
-			headers(headers -> headers.put("Content-Type", "application/json").
-				put("Authorization", "Bearer " + client.getAccessToken()));
-		ContentResponse serverResponse = clientRequests.send(request);
+		URI uri = REST_SERVER.resolve("v2/registry/" + registry.getName() + "/repositories/" +
+			repository.getName() + "/digests/" + digest);
+		Request request = client.createRequest(uri).
+			method(DELETE);
+		ContentResponse serverResponse = client.send(request);
 		switch (serverResponse.getStatus())
 		{
 			case NO_CONTENT_204, NOT_FOUND_404 ->
@@ -147,19 +145,18 @@ public final class DockerImage
 			}
 			case UNAUTHORIZED_401 ->
 			{
-				JsonNode json = DigitalOceans.getResponseBody(client, serverResponse);
+				JsonNode json = client.getResponseBody(serverResponse);
 				throw new HttpResponseException(json.get("message").textValue(), serverResponse);
 			}
 			case PRECONDITION_FAILED_412 ->
 			{
 				// Example: "manifest is referenced by one or more other manifests" or
 				// "delete operations are not available while garbage collection is running"
-				JsonNode json = DigitalOceans.getResponseBody(client, serverResponse);
+				JsonNode json = client.getResponseBody(serverResponse);
 				throw new IllegalArgumentException(json.get("message").textValue());
 			}
-			default -> throw new AssertionError(
-				"Unexpected response: " + clientRequests.toString(serverResponse) + "\n" +
-					"Request: " + clientRequests.toString(request));
+			default -> throw new AssertionError("Unexpected response: " + client.toString(serverResponse) + "\n" +
+				"Request: " + client.toString(request));
 		}
 	}
 
@@ -171,6 +168,19 @@ public final class DockerImage
 	public DockerRepository getRepository()
 	{
 		return repository;
+	}
+
+	@Override
+	public int hashCode()
+	{
+		return Objects.hash(repository, digest);
+	}
+
+	@Override
+	public boolean equals(Object o)
+	{
+		return o instanceof DockerImage other && other.repository.equals(repository) &&
+			other.digest.equals(digest);
 	}
 
 	/**

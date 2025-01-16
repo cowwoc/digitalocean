@@ -10,7 +10,7 @@ import java.util.concurrent.TimeoutException;
  *
  * @param <T> the type of value returned by this mapper
  */
-public interface JsonMapper<T>
+public interface JsonToObject<T>
 {
 	/**
 	 * Parses JSON into an Object.

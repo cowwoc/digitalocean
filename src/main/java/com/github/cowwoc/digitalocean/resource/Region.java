@@ -1,10 +1,16 @@
 package com.github.cowwoc.digitalocean.resource;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.github.cowwoc.digitalocean.client.DigitalOceanClient;
+
+import java.io.IOException;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.TimeoutException;
+
+import static com.github.cowwoc.digitalocean.internal.client.MainDigitalOceanClient.REST_SERVER;
+import static com.github.cowwoc.requirements10.java.DefaultJavaValidators.that;
 
 /**
  * A geographical region that contains one or more <a
@@ -15,96 +21,116 @@ public enum Region
 	/**
 	 * New York, United States.
 	 */
-	NYC,
+	NEW_YORK("nyc"),
 	/**
 	 * Amsterdam, Netherlands.
 	 */
-	AMS,
+	AMSTERDAM("ams"),
 	/**
 	 * San Francisco, United States.
 	 */
-	SFO,
+	SAN_FRANCISCO("sfo"),
 	/**
 	 * Singapore, Singapore.
 	 */
-	SGP,
+	SINGAPORE("sgp"),
 	/**
 	 * London, United Kingdom.
 	 */
-	LON,
+	LONDON("lon"),
 	/**
 	 * Frankfurt, Germany.
 	 */
-	FRA,
+	FRANCE("fra"),
 	/**
 	 * Toronto, Canada.
 	 */
-	TOR,
+	TORONTO("tor"),
 	/**
 	 * Bangalore, India.
 	 */
-	BLR,
+	BANGALORE("blr"),
 	/**
 	 * Sydney, Australia.
 	 */
-	SYD;
+	SYDNEY("syd");
+
+	private final String prefix;
 
 	/**
-	 * A cached mapping from each region to its zones.
+	 * Creates a new region.
+	 *
+	 * @param prefix the prefix of zone IDs in this region
+	 * @throws NullPointerException     if {@code prefix} is null
+	 * @throws IllegalArgumentException if {@code prefix} contains leading or trailing whitespace or is empty
 	 */
-	private static final Map<Region, List<Zone>> REGION_TO_ZONES;
-
-	static
+	Region(String prefix)
 	{
-		Region[] regions = values();
-		Map<Region, List<Zone>> builder = HashMap.newHashMap(regions.length);
-		for (Region region : regions)
-		{
-			List<Zone> zones = new ArrayList<>();
-			for (Zone zone : Zone.values())
-				if (zone.getRegion() == region)
-					zones.add(zone);
-			builder.put(region, zones);
-		}
-		// Make the map thread-safe
-		REGION_TO_ZONES = Map.copyOf(builder);
+		assert that(prefix, "prefix").isStripped().isNotEmpty().elseThrow();
+		this.prefix = prefix;
 	}
 
 	/**
-	 * Looks up the region by its slug.
+	 * Returns the zones in this region that are available for creating Droplets.
 	 *
-	 * @param slug the slug to look up
-	 * @return the matching value
-	 * @throws IllegalArgumentException if no match is found
+	 * @param client the client configuration
+	 * @return an empty set if no match is found
+	 * @throws NullPointerException  if any of the arguments are null
+	 * @throws IllegalStateException if the client is closed
+	 * @throws IOException           if an I/O error occurs. These errors are typically transient, and retrying
+	 *                               the request may resolve the issue.
+	 * @throws TimeoutException      if the request times out before receiving a response. This might indicate
+	 *                               network latency or server overload.
+	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
+	 *                               due to shutdown signals.
 	 */
-	public static Region getBySlug(String slug)
+	public Set<Zone> getZones(DigitalOceanClient client)
+		throws IOException, InterruptedException, TimeoutException
 	{
-		return valueOf(slug.toUpperCase(Locale.ROOT));
-	}
-
-	/**
-	 * Returns the region's slug.
-	 *
-	 * @return the region's slug
-	 */
-	public String toSlug()
-	{
-		return name().toLowerCase(Locale.ROOT);
+		return getZones(client, true);
 	}
 
 	/**
 	 * Returns the zones in this region.
 	 *
-	 * @return the zones in this region
+	 * @param client            the client configuration
+	 * @param canCreateDroplets {@code true} if the returned types must be able to create Droplets
+	 * @return an empty set if no match is found
+	 * @throws NullPointerException  if any of the arguments are null
+	 * @throws IllegalStateException if the client is closed
+	 * @throws IOException           if an I/O error occurs. These errors are typically transient, and retrying
+	 *                               the request may resolve the issue.
+	 * @throws TimeoutException      if the request times out before receiving a response. This might indicate
+	 *                               network latency or server overload.
+	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
+	 *                               due to shutdown signals.
 	 */
-	public List<Zone> getZones()
+	public Set<Zone> getZones(DigitalOceanClient client, boolean canCreateDroplets)
+		throws IOException, InterruptedException, TimeoutException
 	{
-		return REGION_TO_ZONES.get(this);
+		// https://docs.digitalocean.com/reference/api/api-reference/#operation/regions_list
+		return client.getElements(REST_SERVER.resolve("v2/regions"), Map.of(), body ->
+		{
+			Set<Zone> zones = new HashSet<>();
+			for (JsonNode zone : body.get("regions"))
+			{
+				Zone candidate = Zone.getByJson(client, zone);
+				if (candidate.canCreateDroplets() || !canCreateDroplets)
+					zones.add(candidate);
+			}
+			return zones;
+		});
 	}
 
-	@Override
-	public String toString()
+	/**
+	 * Determines if a region contains a zone.
+	 *
+	 * @param zone the zone
+	 * @return {@code true} if the region contains the zone
+	 * @throws NullPointerException if {@code zone} is null
+	 */
+	public boolean contains(Zone zone)
 	{
-		return toSlug();
+		return zone.getId().getValue().startsWith(prefix);
 	}
 }

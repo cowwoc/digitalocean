@@ -6,20 +6,23 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.cowwoc.digitalocean.client.DigitalOceanClient;
 import com.github.cowwoc.digitalocean.exception.PermissionDeniedException;
-import com.github.cowwoc.digitalocean.internal.util.ClientRequests;
-import com.github.cowwoc.digitalocean.internal.util.DigitalOceans;
+import com.github.cowwoc.digitalocean.internal.util.Strings;
 import com.github.cowwoc.digitalocean.internal.util.ToStringBuilder;
 import org.eclipse.jetty.client.ContentResponse;
 import org.eclipse.jetty.client.Request;
 
 import java.io.IOException;
+import java.time.DayOfWeek;
+import java.time.OffsetTime;
+import java.time.ZoneOffset;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.LinkedHashSet;
+import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
 
-import static com.github.cowwoc.digitalocean.internal.util.DigitalOceans.REST_SERVER;
+import static com.github.cowwoc.digitalocean.internal.client.MainDigitalOceanClient.REST_SERVER;
 import static com.github.cowwoc.digitalocean.resource.DropletFeature.MONITORING;
 import static com.github.cowwoc.digitalocean.resource.DropletFeature.PRIVATE_NETWORKING;
 import static com.github.cowwoc.requirements10.java.DefaultJavaValidators.requireThat;
@@ -34,14 +37,17 @@ public final class DropletCreator
 {
 	private final DigitalOceanClient client;
 	private final String name;
-	private final DropletType type;
+	private final DropletType.Id type;
 	private final DropletImage image;
-	private Zone zone;
+	private Zone.Id zone;
 	private final Set<SshPublicKey> sshKeys = new LinkedHashSet<>();
 	private final Set<DropletFeature> features = EnumSet.of(MONITORING, PRIVATE_NETWORKING);
 	private final Set<String> tags = new LinkedHashSet<>();
-	private final Vpc vpc;
+	private Vpc.Id vpc;
 	private String userData = "";
+	private BackupSchedule backupSchedule;
+	//	private Set<Volume> volumes;
+	private boolean failOnUnsupportedOperatingSystem;
 
 	/**
 	 * Creates a new instance.
@@ -49,9 +55,8 @@ public final class DropletCreator
 	 * @param client the client configuration
 	 * @param name   the name of the droplet. Names are case-insensitive.
 	 * @param type   the machine type of the droplet
-	 * @param image  the image ID of a public or private image or the slug identifier for a public image that
-	 *               will be used to boot this droplet
-	 * @param vpc    the VPC to which the droplet will be assigned
+	 * @param image  the image ID of a public or private image or the slug identifier for a public image to use
+	 *               to boot this droplet
 	 * @throws NullPointerException     if any of the arguments are null
 	 * @throws IllegalArgumentException if:
 	 *                                  <ul>
@@ -62,27 +67,24 @@ public final class DropletCreator
 	 *                                    <li>any of the arguments contain leading or trailing whitespace or
 	 *                                    are empty.</li>
 	 *                                  </ul>
-	 * @see Vpc#getDefault(DigitalOceanClient, Zone)
 	 */
-	public DropletCreator(DigitalOceanClient client, String name, DropletType type, DropletImage image, Vpc vpc)
+	public DropletCreator(DigitalOceanClient client, String name, DropletType.Id type, DropletImage image)
 	{
 		requireThat(client, "client").isNotNull();
 		// Taken from https://docs.digitalocean.com/reference/api/api-reference/#operation/droplets_create
 		requireThat(name, "name").matches("^[a-zA-Z0-9]?[a-z0-9A-Z.\\-]*[a-z0-9A-Z]$");
 		requireThat(type, "type").isNotNull();
 		requireThat(image, "image").isNotNull();
-		requireThat(vpc, "vpc").isNotNull();
 		this.client = client;
 		this.name = name;
 		this.type = type;
 		this.image = image;
-		this.vpc = vpc;
 	}
 
 	/**
 	 * Returns the name of the droplet.
 	 *
-	 * @return the name of the droplet
+	 * @return the name
 	 */
 	public String name()
 	{
@@ -92,16 +94,16 @@ public final class DropletCreator
 	/**
 	 * Returns the machine type of the droplet.
 	 *
-	 * @return the machine type of the droplet
+	 * @return the machine type
 	 */
-	public DropletType type()
+	public DropletType.Id type()
 	{
 		return type;
 	}
 
 	/**
-	 * Returns the image ID of a public or private image or the slug identifier for a public image that will be
-	 * used to boot this droplet.
+	 * Returns the image ID of a public or private image or the slug identifier for a public image to use to
+	 * boot this droplet.
 	 *
 	 * @return the image
 	 */
@@ -111,13 +113,27 @@ public final class DropletCreator
 	}
 
 	/**
-	 * Returns the VPC that the droplet will be deployed in.
+	 * Returns the VPC to deploy the droplet in.
 	 *
-	 * @return the VPC
+	 * @return {@code null} to deploy the droplet into the zone's
+	 *  {@link Vpc#getDefault(DigitalOceanClient, Zone.Id) default} VPC
 	 */
-	public Vpc vpc()
+	public Vpc.Id vpc()
 	{
 		return vpc;
+	}
+
+	/***
+	 * Sets the VPC to deploy the droplet in.
+	 *
+	 * @param vpc    {@code null} to deploy the droplet into the zone's
+	 * {@link Vpc#getDefault(DigitalOceanClient, Zone.Id) default} VPC
+	 * @return this
+	 */
+	public DropletCreator vpc(Vpc.Id vpc)
+	{
+		this.vpc = vpc;
+		return this;
 	}
 
 	/**
@@ -127,7 +143,7 @@ public final class DropletCreator
 	 * @return this
 	 * @throws NullPointerException if {@code zone} is null
 	 */
-	public DropletCreator zone(Zone zone)
+	public DropletCreator zone(Zone.Id zone)
 	{
 		requireThat(zone, "zone").isNotNull();
 		this.zone = zone;
@@ -139,7 +155,7 @@ public final class DropletCreator
 	 *
 	 * @return the zone
 	 */
-	public Zone zone()
+	public Zone.Id zone()
 	{
 		return zone;
 	}
@@ -164,6 +180,29 @@ public final class DropletCreator
 	public Set<SshPublicKey> sshKeys()
 	{
 		return sshKeys;
+	}
+
+	/**
+	 * Returns the Droplet's backup schedule.
+	 *
+	 * @return {@code null} if backups are disabled
+	 */
+	public BackupSchedule backupSchedule()
+	{
+		return backupSchedule;
+	}
+
+	/**
+	 * Sets the Droplet's backup schedule.
+	 *
+	 * @param backupSchedule {@code null} to disable backups
+	 * @return this
+	 */
+	public DropletCreator backupSchedule(BackupSchedule backupSchedule)
+	{
+		requireThat(backupSchedule, "backupSchedule").isNotNull();
+		this.backupSchedule = backupSchedule;
+		return this;
 	}
 
 	/**
@@ -228,9 +267,9 @@ public final class DropletCreator
 	}
 
 	/**
-	 * Adds tags to the droplet.
+	 * Sets the tags of the droplet.
 	 *
-	 * @param tags the tags to add
+	 * @param tags the tags
 	 * @return this
 	 * @throws NullPointerException     if {@code tags} is null
 	 * @throws IllegalArgumentException if any of the tags:
@@ -244,6 +283,7 @@ public final class DropletCreator
 	public DropletCreator tags(Collection<String> tags)
 	{
 		requireThat(tags, "tags").isNotNull().doesNotContain(null);
+		this.tags.clear();
 		for (String tag : tags)
 		{
 			requireThat(tag, "tag").withContext(tags, "tags").matches("^[a-zA-Z0-9_\\-:]+$").
@@ -285,6 +325,20 @@ public final class DropletCreator
 	}
 
 	/**
+	 * Determines if the deployment should fail if the web console does not support the Droplet operating
+	 * system. The default value is {@code false}.
+	 *
+	 * @param failOnUnsupportedOperatingSystem {@code true} if the deployment should fail on unsupported
+	 *                                         operating systems
+	 * @return this
+	 */
+	public DropletCreator failOnUnsupportedOperatingSystem(boolean failOnUnsupportedOperatingSystem)
+	{
+		this.failOnUnsupportedOperatingSystem = failOnUnsupportedOperatingSystem;
+		return this;
+	}
+
+	/**
 	 * Returns the droplet's "user data" which may be used to configure the Droplet on the first boot, often a
 	 * "cloud-config" file or Bash script. It must be plain text and may not exceed 64 KiB in size.
 	 *
@@ -316,28 +370,25 @@ public final class DropletCreator
 		ObjectNode requestBody = om.createObjectNode().
 			put("name", name).
 			put("size", type.toString()).
-			put("image", image.getId());
+			put("image", image.getId().getValue());
 		if (zone != null)
 			requestBody.put("region", zone.toString());
 		if (!sshKeys.isEmpty())
 		{
 			ArrayNode sshKeysNode = requestBody.putArray("ssh_keys");
 			for (SshPublicKey key : sshKeys)
-				sshKeysNode.add(key.getId());
+				sshKeysNode.add(key.getId().getValue());
 		}
-		requestBody.put("vpc_uuid", vpc.getId());
+		if (backupSchedule != null)
+		{
+			requestBody.put("backups", true);
+			requestBody.set("backups_policy", backupSchedule.toJson());
+		}
+		if (vpc != null)
+			requestBody.put("vpc_uuid", vpc.getValue());
 		for (DropletFeature feature : features)
 		{
-			String name = switch (feature)
-			{
-				// Enabled by default and cannot be disabled
-				case MONITORING -> "";
-				case METRICS_AGENT -> "monitoring";
-				default -> feature.getJsonName();
-			};
-			if (name.isEmpty())
-				continue;
-			requestBody.put("monitoring", true);
+			String name = feature.toJson();
 			requestBody.put(name, true);
 		}
 		if (!tags.isEmpty())
@@ -348,12 +399,12 @@ public final class DropletCreator
 		}
 		if (!userData.isEmpty())
 			requestBody.put("user_data", userData);
+		if (failOnUnsupportedOperatingSystem)
+			requestBody.put("with_droplet_agent", true);
 
-		String uri = REST_SERVER + "/v2/droplets";
-		Request request = DigitalOceans.createRequest(client, uri, requestBody).
+		Request request = client.createRequest(REST_SERVER.resolve("v2/droplets"), requestBody).
 			method(POST);
-		ClientRequests clientRequests = client.getClientRequests();
-		ContentResponse serverResponse = clientRequests.send(request);
+		ContentResponse serverResponse = client.send(request);
 		String responseAsString = serverResponse.getContentAsString();
 		switch (serverResponse.getStatus())
 		{
@@ -364,19 +415,18 @@ public final class DropletCreator
 			case UNPROCESSABLE_ENTITY_422 ->
 			{
 				// Example: creating this/these droplet(s) will exceed your droplet limit
-				JsonNode json = DigitalOceans.getResponseBody(client, serverResponse);
+				JsonNode json = client.getResponseBody(serverResponse);
 				throw new PermissionDeniedException(json.get("message").textValue());
 			}
-			default -> throw new AssertionError("Unexpected response: " +
-				clientRequests.toString(serverResponse) + "\n" +
-				"Request: " + clientRequests.toString(request));
+			default -> throw new AssertionError("Unexpected response: " + client.toString(serverResponse) + "\n" +
+				"Request: " + client.toString(request));
 		}
 		JsonNode body = client.getObjectMapper().readTree(responseAsString);
 		JsonNode dropletNode = body.get("droplet");
 		if (dropletNode == null)
 		{
-			throw new AssertionError("Unexpected response: " + clientRequests.toString(serverResponse) + "\n" +
-				"Request: " + clientRequests.toString(request));
+			throw new AssertionError("Unexpected response: " + client.toString(serverResponse) + "\n" +
+				"Request: " + client.toString(request));
 		}
 		return Droplet.getByJson(client, dropletNode);
 	}
@@ -447,5 +497,113 @@ public final class DropletCreator
 			add("sshKeys", sshKeys).
 			add("userData", userData).
 			toString();
+	}
+
+	/**
+	 * The schedule for when backup activities may be performed on the droplet.
+	 */
+	public static final class BackupSchedule
+	{
+		private final DigitalOceanClient client;
+		private final OffsetTime hour;
+		private final DayOfWeek day;
+		private final BackupFrequency frequency;
+
+		/**
+		 * Creates a new schedule.
+		 *
+		 * @param client    the client configuration
+		 * @param hour      the start hour when maintenance may take place
+		 * @param day       (optional) the day of the week when maintenance may take place (ignored if
+		 *                  {@code frequency} is daily})
+		 * @param frequency determines how often backups take place
+		 * @throws NullPointerException     if any of the arguments are null
+		 * @throws IllegalArgumentException if {@code hour} contains a non-zero minute, second or nano component
+		 */
+		public BackupSchedule(DigitalOceanClient client, OffsetTime hour, DayOfWeek day,
+			BackupFrequency frequency)
+		{
+			requireThat(client, "client").isNotNull();
+			requireThat(hour, "hour").isNotNull();
+			requireThat(hour.getMinute(), "hour.getMinute()").isZero();
+			requireThat(hour.getSecond(), "hour.getSecond()").isZero();
+			requireThat(hour.getNano(), "hour.getNano()").isZero();
+
+			this.client = client;
+			this.hour = hour;
+			this.day = day;
+			this.frequency = frequency;
+		}
+
+		/**
+		 * Returns the JSON representation of this object.
+		 *
+		 * @return the JSON representation
+		 * @throws IllegalStateException if the client is closed
+		 */
+		public ObjectNode toJson()
+		{
+			ObjectNode json = client.getObjectMapper().createObjectNode();
+			OffsetTime hourAtUtc = hour.withOffsetSameInstant(ZoneOffset.UTC);
+			json.put("hour", Strings.HOUR_MINUTE_SECOND.format(hourAtUtc));
+			json.put("day", day.name().toLowerCase(Locale.ROOT));
+			json.put("plan", frequency.toJson());
+			return json;
+		}
+
+		/**
+		 * Returns the start hour when maintenance may take place.
+		 *
+		 * @return the start hour
+		 */
+		public OffsetTime hour()
+		{
+			return hour;
+		}
+
+		/**
+		 * Returns the day of the week when maintenance may take place.
+		 *
+		 * @return the day
+		 */
+		public DayOfWeek day()
+		{
+			return day;
+		}
+
+		@Override
+		public String toString()
+		{
+			return new ToStringBuilder(Kubernetes.MaintenanceSchedule.class).
+				add("hour", hour).
+				add("day", day).
+				add("frequency", frequency).
+				toString();
+		}
+	}
+
+	/**
+	 * Determines how often a backup is created.
+	 */
+	public enum BackupFrequency
+	{
+		/**
+		 * Every day.
+		 */
+		DAILY,
+		/**
+		 * Every week.
+		 */
+		WEEKLY;
+
+		/**
+		 * Returns the version's JSON representation (slug).
+		 *
+		 * @return the JSON representation
+		 */
+		public String toJson()
+		{
+			return name().toLowerCase(Locale.ROOT);
+		}
 	}
 }

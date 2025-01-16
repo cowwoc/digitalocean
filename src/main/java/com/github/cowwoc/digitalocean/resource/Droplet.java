@@ -4,34 +4,29 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.cowwoc.digitalocean.client.DigitalOceanClient;
-import com.github.cowwoc.digitalocean.internal.util.ClientRequests;
-import com.github.cowwoc.digitalocean.internal.util.DigitalOceans;
+import com.github.cowwoc.digitalocean.id.IntegerId;
 import com.github.cowwoc.digitalocean.internal.util.ToStringBuilder;
 import com.github.cowwoc.requirements10.annotation.CheckReturnValue;
 import org.eclipse.jetty.client.ContentResponse;
-import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.Request;
 
 import java.io.IOException;
 import java.net.InetAddress;
+import java.net.URI;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Predicate;
 
-import static com.github.cowwoc.digitalocean.internal.util.DigitalOceans.REST_SERVER;
+import static com.github.cowwoc.digitalocean.internal.client.MainDigitalOceanClient.REST_SERVER;
 import static com.github.cowwoc.digitalocean.resource.DropletFeature.IPV6;
 import static com.github.cowwoc.digitalocean.resource.DropletFeature.MONITORING;
 import static com.github.cowwoc.requirements10.java.DefaultJavaValidators.requireThat;
-import static org.eclipse.jetty.http.HttpMethod.DELETE;
-import static org.eclipse.jetty.http.HttpMethod.GET;
 import static org.eclipse.jetty.http.HttpStatus.CREATED_201;
-import static org.eclipse.jetty.http.HttpStatus.NO_CONTENT_204;
 
 /**
  * A computer node.
@@ -53,115 +48,50 @@ public final class Droplet
 	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
 	 *                               due to shutdown signals.
 	 */
-	public static Droplet getById(DigitalOceanClient client, int id)
+	public static Droplet getById(DigitalOceanClient client, Id id)
 		throws IOException, TimeoutException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/droplets_get
-		@SuppressWarnings("PMD.CloseResource")
-		HttpClient httpClient = client.getHttpClient();
-		ClientRequests clientRequests = client.getClientRequests();
-		String uri = REST_SERVER + "/v2/droplets/" + id;
-		ContentResponse serverResponse = clientRequests.send(httpClient.newRequest(uri).
-			method(GET).
-			headers(headers -> headers.put("Content-Type", "application/json").
-				put("Authorization", "Bearer " + client.getAccessToken())));
-		JsonNode body = DigitalOceans.getResponseBody(client, serverResponse);
-		JsonNode droplet = body.get("droplet");
-		return getByJson(client, droplet);
+		return client.getResource(REST_SERVER.resolve("v2/droplets/" + id.getValue()), body ->
+		{
+			JsonNode droplet = body.get("droplet");
+			return getByJson(client, droplet);
+		});
 	}
 
 	/**
-	 * Looks up droplets by their name.
+	 * Returns the all the Droplets.
 	 *
 	 * @param client the client configuration
-	 * @param name   a name
-	 * @return an empty list if no match is found
-	 * @throws NullPointerException     if any of the arguments are null
-	 * @throws IllegalArgumentException if {@code name} contains leading or trailing whitespace or is empty
-	 * @throws IllegalStateException    if the client is closed
-	 * @throws IOException              if an I/O error occurs. These errors are typically transient, and
-	 *                                  retrying the request may resolve the issue.
-	 * @throws TimeoutException         if the request times out before receiving a response. This might
-	 *                                  indicate network latency or server overload.
-	 * @throws InterruptedException     if the thread is interrupted while waiting for a response. This can
-	 *                                  happen due to shutdown signals.
+	 * @return an empty Set if no match is found
+	 * @throws NullPointerException  if any of the arguments are null
+	 * @throws IllegalStateException if the client is closed
+	 * @throws IOException           if an I/O error occurs. These errors are typically transient, and retrying
+	 *                               the request may resolve the issue.
+	 * @throws TimeoutException      if the request times out before receiving a response. This might indicate
+	 *                               network latency or server overload.
+	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
+	 *                               due to shutdown signals.
 	 */
-	public static List<Droplet> getByName(DigitalOceanClient client, String name)
+	public static Set<Droplet> getAll(DigitalOceanClient client)
 		throws IOException, TimeoutException, InterruptedException
 	{
-		requireThat(name, "name").isStripped().isNotEmpty();
-
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/droplets_list
-		String uri = REST_SERVER + "/v2/droplets";
-		return DigitalOceans.getElements(client, uri, Map.of(), body ->
+		return client.getElements(REST_SERVER.resolve("v2/droplets"), Map.of(), body ->
 		{
-			// https://docs.digitalocean.com/reference/api/intro/#links--pagination
-			List<Droplet> droplets = new ArrayList<>();
+			Set<Droplet> droplets = new HashSet<>();
 			for (JsonNode droplet : body.get("droplets"))
-			{
-				String actualName = droplet.get("name").textValue();
-				if (actualName.equals(name))
-					droplets.add(getByJson(client, droplet));
-			}
+				droplets.add(getByJson(client, droplet));
 			return droplets;
 		});
 	}
 
 	/**
-	 * Looks up a droplet by its address.
+	 * Returns the first Droplet that matches a predicate.
 	 *
-	 * @param client  the client configuration
-	 * @param address the address
-	 * @return null if no match is found
-	 * @throws NullPointerException     if any of the arguments are null
-	 * @throws IllegalArgumentException if {@code address} contains leading or trailing whitespace or is empty
-	 * @throws IllegalStateException    if the client is closed
-	 * @throws IOException              if an I/O error occurs. These errors are typically transient, and
-	 *                                  retrying the request may resolve the issue.
-	 * @throws TimeoutException         if the request times out before receiving a response. This might
-	 *                                  indicate network latency or server overload.
-	 * @throws InterruptedException     if the thread is interrupted while waiting for a response. This can
-	 *                                  happen due to shutdown signals.
-	 */
-	public static Droplet getByAddress(DigitalOceanClient client, String address)
-		throws IOException, TimeoutException, InterruptedException
-	{
-		requireThat(address, "address").isStripped().isNotEmpty();
-
-		// https://docs.digitalocean.com/reference/api/api-reference/#operation/droplets_list
-		String uri = REST_SERVER + "/v2/droplets";
-		return DigitalOceans.getElement(client, uri, Map.of(), body ->
-		{
-			// https://docs.digitalocean.com/reference/api/intro/#links--pagination
-			for (JsonNode droplet : body.get("droplets"))
-			{
-				JsonNode networks = droplet.get("networks");
-				JsonNode v4 = networks.get("v4");
-				for (JsonNode addressNode : v4)
-				{
-					String value = addressNode.get("ip_address").textValue();
-					if (value.equals(address))
-						return getByJson(client, droplet);
-				}
-				JsonNode v6 = networks.get("v6");
-				for (JsonNode addressNode : v6)
-				{
-					String value = addressNode.get("ip_address").textValue();
-					if (value.equals(address))
-						return getByJson(client, droplet);
-				}
-			}
-			return null;
-		});
-	}
-
-	/**
-	 * Looks up a droplet by its tags.
-	 *
-	 * @param client the client configuration
-	 * @param tags   one or more tags
-	 * @return an empty list if no match is found
-	 * @throws NullPointerException     if any of the arguments are null
+	 * @param predicate the predicate
+	 * @return null if no match was found
+	 * @throws NullPointerException     if {@code predicate} is null
 	 * @throws IllegalArgumentException if any of the tags contain leading or trailing whitespace or are empty
 	 * @throws IllegalStateException    if the client is closed
 	 * @throws IOException              if an I/O error occurs. These errors are typically transient, and
@@ -171,21 +101,19 @@ public final class Droplet
 	 * @throws InterruptedException     if the thread is interrupted while waiting for a response. This can
 	 *                                  happen due to shutdown signals.
 	 */
-	public static List<Droplet> getByTags(DigitalOceanClient client, Collection<String> tags)
+	public Droplet getByPredicate(Predicate<Droplet> predicate)
 		throws IOException, TimeoutException, InterruptedException
 	{
-		requireThat(tags, "tags").isNotNull();
-		for (String tag : tags)
-			requireThat(tag, "tag").isStripped().isNotEmpty();
-
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/droplets_list
-		String uri = REST_SERVER + "/v2/droplets";
-		return DigitalOceans.getElements(client, uri, Map.of("tag_name", tags), body ->
+		return client.getElement(REST_SERVER.resolve("v2/droplets"), Map.of(), body ->
 		{
-			List<Droplet> droplets = new ArrayList<>();
 			for (JsonNode droplet : body.get("droplets"))
-				droplets.add(getByJson(client, droplet));
-			return droplets;
+			{
+				Droplet candidate = getByJson(client, droplet);
+				if (predicate.test(candidate))
+					return candidate;
+			}
+			return null;
 		});
 	}
 
@@ -197,8 +125,7 @@ public final class Droplet
 	 * @param type   the machine type of the droplet
 	 * @param image  the image ID of a public or private image or the slug identifier for a public image that
 	 *               will be used to boot this droplet
-	 * @param vpc    the VPC that the droplet will be deployed into
-	 * @return a new Droplet builder
+	 * @return a new Droplet creator
 	 * @throws NullPointerException     if any of the arguments are null
 	 * @throws IllegalArgumentException if:
 	 *                                  <ul>
@@ -210,65 +137,59 @@ public final class Droplet
 	 *                                    are empty.</li>
 	 *                                  </ul>
 	 * @throws IllegalStateException    if the client is closed
-	 * @see Vpc#getDefault(DigitalOceanClient, Zone)
+	 * @see Vpc#getDefault(DigitalOceanClient, Zone.Id)
 	 */
-	public static DropletCreator creator(DigitalOceanClient client, String name, DropletType type,
-		DropletImage image, Vpc vpc)
+	public static DropletCreator creator(DigitalOceanClient client, String name, DropletType.Id type,
+		DropletImage image)
 	{
-		return new DropletCreator(client, name, type, image, vpc);
+		return new DropletCreator(client, name, type, image);
 	}
 
 	/**
+	 * Parses the JSON representation of this class.
+	 *
 	 * @param client the client configuration
-	 * @param json   the JSON representation of the droplet
+	 * @param json   the JSON representation
 	 * @return the droplet
-	 * @throws NullPointerException  if any of the arguments are null
-	 * @throws IllegalStateException if the client is closed
-	 * @throws IOException           if an I/O error occurs. These errors are typically transient, and retrying
-	 *                               the request may resolve the issue.
-	 * @throws TimeoutException      if the request times out before receiving a response. This might indicate
-	 *                               network latency or server overload.
-	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
-	 *                               due to shutdown signals.
+	 * @throws NullPointerException     if any of the arguments are null
+	 * @throws IllegalArgumentException if the server response could not be parsed
+	 * @throws IllegalStateException    if the client is closed
+	 * @throws IOException              if an I/O error occurs. These errors are typically transient, and
+	 *                                  retrying the request may resolve the issue.
+	 * @throws TimeoutException         if the request times out before receiving a response. This might
+	 *                                  indicate network latency or server overload.
+	 * @throws InterruptedException     if the thread is interrupted while waiting for a response. This can
+	 *                                  happen due to shutdown signals.
 	 */
 	static Droplet getByJson(DigitalOceanClient client, JsonNode json)
 		throws IOException, InterruptedException, TimeoutException
 	{
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/droplets_get
-		int id = DigitalOceans.toInt(json, "id");
+		Id id = id(client.getInt(json, "id"));
 		String name = json.get("name").textValue();
 		Instant createdAt = Instant.parse(json.get("created_at").textValue());
-		String sizeSlug = json.get("size_slug").textValue();
-		DropletType type = DropletType.getBySlug(sizeSlug);
+		String dropletTypeSlug = json.get("size_slug").textValue();
+		DropletType.Id type = DropletType.id(dropletTypeSlug);
 
-		JsonNode imageNode = json.get("image");
-		int imageId = imageNode.get("id").intValue();
-		String imageSlug = imageNode.get("slug").textValue();
-		DropletImage image = new DropletImage(imageId, imageSlug);
-
+		DropletImage image = DropletImage.getByJson(client, json.get("image"));
 		JsonNode zoneNode = json.get("region");
 		String zoneSlug = zoneNode.get("slug").textValue();
-		Zone zone = Zone.getBySlug(zoneSlug);
+		Zone.Id zone = Zone.id(zoneSlug);
 		JsonNode featuresNode = json.get("features");
 		Set<String> featureSet = new HashSet<>();
 		featuresNode.forEach(element -> featureSet.add(element.textValue()));
 		Set<DropletFeature> features = EnumSet.noneOf(DropletFeature.class);
 		if (featureSet.contains("droplet_agent"))
-			features.add(DropletFeature.METRICS_AGENT);
+			features.add(MONITORING);
 		if (featureSet.contains("ipv6"))
 			features.add(IPV6);
 		if (featureSet.contains("monitoring"))
 			features.add(MONITORING);
 		if (featureSet.contains("private_networking"))
 			features.add(DropletFeature.PRIVATE_NETWORKING);
-		JsonNode vpcNode = json.get("vpc_uuid");
-		Vpc vpc;
-		if (vpcNode != null)
-			vpc = Vpc.getById(client, vpcNode.textValue());
-		else
-			vpc = Vpc.getDefault(client, zone);
 
-		List<InetAddress> addresses = new ArrayList<>();
+		Vpc.Id vpc = Vpc.id(json.get("vpc_uuid").textValue());
+		Set<InetAddress> addresses = new HashSet<>();
 		JsonNode networks = json.get("networks");
 		JsonNode v4 = networks.get("v4");
 		for (JsonNode address : v4)
@@ -282,26 +203,32 @@ public final class Droplet
 			String value = address.get("ip_address").textValue();
 			addresses.add(InetAddress.ofLiteral(value));
 		}
+		Set<String> tags = client.getElements(json, "tags", JsonNode::textValue);
+		return new Droplet(client, id, name, type, image, zone, vpc, addresses, features, tags, createdAt);
+	}
 
-		JsonNode tagsNode = json.get("tags");
-		Set<String> tags = new HashSet<>();
-		if (tagsNode != null)
-			for (JsonNode element : tagsNode)
-				tags.add(element.textValue());
-		return new Droplet(client, id, name, createdAt, type, image, zone, vpc, addresses, features, tags);
+	/**
+	 * Creates a new ID.
+	 *
+	 * @param value the server-side identifier
+	 * @return the type-safe identifier for the resource
+	 */
+	public static Id id(int value)
+	{
+		return new Id(value);
 	}
 
 	private final DigitalOceanClient client;
-	private final int id;
+	private final Id id;
 	private final String name;
-	private final Instant createdAt;
-	private final DropletType type;
+	private final DropletType.Id type;
 	private final DropletImage image;
-	private final Zone zone;
-	private final Vpc vpc;
-	private final List<InetAddress> addresses;
+	private final Zone.Id zone;
+	private final Vpc.Id vpc;
+	private final Set<InetAddress> addresses;
 	private final Set<DropletFeature> features;
 	private final Set<String> tags;
+	private final Instant createdAt;
 
 	/**
 	 * Creates a new droplet.
@@ -309,7 +236,6 @@ public final class Droplet
 	 * @param client    the client configuration
 	 * @param id        the ID of the droplet
 	 * @param name      the name of the droplet
-	 * @param createdAt the time the droplet was created
 	 * @param type      the machine type
 	 * @param image     the image ID of a public or private image or the slug identifier for a public image that
 	 *                  will be used to boot this droplet
@@ -318,18 +244,18 @@ public final class Droplet
 	 * @param addresses the droplet's IP addresses
 	 * @param features  the features that are enabled on the droplet
 	 * @param tags      the tags that are associated with the droplet
+	 * @param createdAt the time the droplet was created
 	 * @throws NullPointerException     if any of the arguments are null
 	 * @throws IllegalArgumentException if any of the arguments contain leading or trailing whitespace or are
 	 *                                  empty
-	 * @see Vpc#getDefault(DigitalOceanClient, Zone)
+	 * @see Vpc#getDefault(DigitalOceanClient, Zone.Id)
 	 */
-	private Droplet(DigitalOceanClient client, int id, String name, Instant createdAt, DropletType type,
-		DropletImage image, Zone zone, Vpc vpc, List<InetAddress> addresses, Set<DropletFeature> features,
-		Set<String> tags)
+	private Droplet(DigitalOceanClient client, Id id, String name, DropletType.Id type, DropletImage image,
+		Zone.Id zone, Vpc.Id vpc, Set<InetAddress> addresses, Set<DropletFeature> features, Set<String> tags,
+		Instant createdAt)
 	{
 		requireThat(client, "client").isNotNull();
 		requireThat(name, "name").isStripped().isNotEmpty();
-		requireThat(createdAt, "createdAt").isNotNull();
 		requireThat(type, "type").isNotNull();
 		requireThat(image, "image").isNotNull();
 		requireThat(zone, "zone").isNotNull();
@@ -338,25 +264,26 @@ public final class Droplet
 		requireThat(features, "features").isNotNull();
 		requireThat(tags, "tags").isNotNull();
 		for (String tag : tags)
-			requireThat(tag, "tag").isStripped().isNotEmpty();
+			requireThat(tag, "tag").withContext(tags, "tags").isStripped().isNotEmpty();
+		requireThat(createdAt, "createdAt").isNotNull();
 
 		this.client = client;
 		this.id = id;
 		this.name = name;
-		this.createdAt = createdAt;
 		this.type = type;
 		this.image = image;
 		this.zone = zone;
 		this.vpc = vpc;
-		this.addresses = List.copyOf(addresses);
+		this.addresses = Set.copyOf(addresses);
 		this.features = EnumSet.copyOf(features);
 		this.tags = Set.copyOf(tags);
+		this.createdAt = createdAt;
 	}
 
 	/**
 	 * Returns the name of the droplet.
 	 *
-	 * @return the name of the droplet
+	 * @return the name
 	 */
 	public String getName()
 	{
@@ -364,21 +291,11 @@ public final class Droplet
 	}
 
 	/**
-	 * Returns the time the droplet was created.
+	 * Returns the machine type of the droplet.
 	 *
-	 * @return the time the droplet was created
+	 * @return the machine type
 	 */
-	public Instant getCreatedAt()
-	{
-		return createdAt;
-	}
-
-	/**
-	 * Returns the type of the droplet.
-	 *
-	 * @return the type of the droplet
-	 */
-	public DropletType getType()
+	public DropletType.Id getType()
 	{
 		return type;
 	}
@@ -386,7 +303,7 @@ public final class Droplet
 	/**
 	 * Returns the image used to boot this droplet.
 	 *
-	 * @return the image used to boot this droplet
+	 * @return the image
 	 */
 	public DropletImage getImage()
 	{
@@ -396,9 +313,9 @@ public final class Droplet
 	/**
 	 * Returns the zone that the droplet is deployed in.
 	 *
-	 * @return the zone that the droplet is deployed in
+	 * @return the zone
 	 */
-	public Zone getZone()
+	public Zone.Id getZone()
 	{
 		return zone;
 	}
@@ -408,7 +325,7 @@ public final class Droplet
 	 *
 	 * @return the VPC
 	 */
-	public Vpc getVpc()
+	public Vpc.Id getVpc()
 	{
 		return vpc;
 	}
@@ -416,9 +333,9 @@ public final class Droplet
 	/**
 	 * Returns the droplet's IP addresses.
 	 *
-	 * @return the droplet's IP addresses
+	 * @return the IP addresses
 	 */
-	public List<InetAddress> getAddresses()
+	public Set<InetAddress> getAddresses()
 	{
 		return addresses;
 	}
@@ -426,7 +343,7 @@ public final class Droplet
 	/**
 	 * Returns the features that are enabled on the droplet.
 	 *
-	 * @return the features that are enabled on the droplet
+	 * @return the features that are enabled
 	 */
 	public Set<DropletFeature> getFeatures()
 	{
@@ -436,11 +353,21 @@ public final class Droplet
 	/**
 	 * Returns the droplet's tags.
 	 *
-	 * @return the droplet's tags
+	 * @return the tags
 	 */
 	public Set<String> getTags()
 	{
 		return tags;
+	}
+
+	/**
+	 * Returns the time the droplet was created.
+	 *
+	 * @return the time
+	 */
+	public Instant getCreatedAt()
+	{
+		return createdAt;
 	}
 
 	/**
@@ -468,11 +395,10 @@ public final class Droplet
 	 * @return {@code true} if the droplet matches the desired state; otherwise, {@code false}
 	 * @throws NullPointerException if {@code state} is null
 	 */
-	public boolean matchesState(DropletCreator state)
+	public boolean matches(DropletCreator state)
 	{
-		return state.type().equals(type) && state.image().equals(image) &&
-			state.zone().equals(zone) && state.features().equals(features) &&
-			state.tags().equals(tags) && state.vpc().equals(vpc);
+		return state.type().equals(type) && state.image().equals(image) && state.zone().equals(zone) &&
+			state.features().equals(features) && Objects.equals(state.vpc(), vpc) && state.tags().equals(tags);
 	}
 
 	/**
@@ -505,42 +431,39 @@ public final class Droplet
 		requireThat(newName, "newName").isStripped().isNotEmpty();
 
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/dropletActions_post
-		ClientRequests clientRequests = client.getClientRequests();
-		String uri = REST_SERVER + "/v2/droplets/" + id + "/actions";
 		ObjectMapper om = client.getObjectMapper();
 		ObjectNode requestBody = om.createObjectNode().
 			put("type", "rename").
 			put("name", newName);
-		Request request = DigitalOceans.createRequest(client, uri, requestBody);
-		ContentResponse serverResponse = clientRequests.send(request);
+		Request request = client.createRequest(REST_SERVER.resolve("v2/droplets/" + id + "/actions"),
+			requestBody);
+		ContentResponse serverResponse = client.send(request);
 		switch (serverResponse.getStatus())
 		{
 			case CREATED_201 ->
 			{
 				// success
 			}
-			default -> throw new AssertionError(
-				"Unexpected response: " + clientRequests.toString(serverResponse) + "\n" +
-					"Request: " + clientRequests.toString(request));
+			default -> throw new AssertionError("Unexpected response: " + client.toString(serverResponse) + "\n" +
+				"Request: " + client.toString(request));
 		}
-		JsonNode responseBody = DigitalOceans.getResponseBody(client, serverResponse);
+		JsonNode responseBody = client.getResponseBody(serverResponse);
 		String status = responseBody.get("status").textValue();
 		while (status.equals("in-progress"))
 		{
 			// https://docs.digitalocean.com/reference/api/api-reference/#operation/dropletActions_get
-			int actionId = DigitalOceans.toInt(responseBody, "id");
-			uri = REST_SERVER + "/v2/droplets/" + id + "/actions/" + actionId;
-			request = DigitalOceans.createRequest(client, uri);
-			serverResponse = clientRequests.send(request);
+			int actionId = client.getInt(responseBody, "id");
+			URI uri = REST_SERVER.resolve("v2/droplets/" + id + "/actions/" + actionId);
+			request = client.createRequest(uri);
+			serverResponse = client.send(request);
 			status = responseBody.get("status").textValue();
 		}
 		return switch (status)
 		{
 			case "completed" -> reload();
 			case "errored" -> throw new IOException("Failed to rename droplet " + id + " to " + newName);
-			default -> throw new AssertionError(
-				"Unexpected response: " + clientRequests.toString(serverResponse) + "\n" +
-					"Request: " + clientRequests.toString(request));
+			default -> throw new AssertionError("Unexpected response: " + client.toString(serverResponse) + "\n" +
+				"Request: " + client.toString(request));
 		};
 	}
 
@@ -558,17 +481,7 @@ public final class Droplet
 	public void destroy() throws IOException, TimeoutException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/droplets_destroy
-		@SuppressWarnings("PMD.CloseResource")
-		HttpClient httpClient = client.getHttpClient();
-		ClientRequests clientRequests = client.getClientRequests();
-		String uri = REST_SERVER + "/v2/droplets/" + id;
-		ContentResponse serverResponse = clientRequests.send(httpClient.newRequest(uri).
-			method(DELETE).
-			headers(headers -> headers.put("Content-Type", "application/json").
-				put("Authorization", "Bearer " + client.getAccessToken())));
-		requireThat(serverResponse.getStatus(), "responseCode").
-			withContext(serverResponse.getContentAsString(), "serverResponse").
-			isEqualTo(NO_CONTENT_204);
+		client.destroyResource(REST_SERVER.resolve("v2/droplets/" + id));
 	}
 
 	@Override
@@ -577,7 +490,6 @@ public final class Droplet
 		return new ToStringBuilder(Droplet.class).
 			add("id", id).
 			add("name", name).
-			add("createdAt", createdAt).
 			add("type", type).
 			add("image", image).
 			add("zone", zone).
@@ -585,6 +497,24 @@ public final class Droplet
 			add("addresses", addresses).
 			add("features", features).
 			add("tags", tags).
+			add("createdAt", createdAt).
 			toString();
+	}
+
+	/**
+	 * A type-safe identifier for this type of resource.
+	 * <p>
+	 * This adds type-safety to API methods by ensuring that IDs specific to one class cannot be used in place
+	 * of IDs belonging to another class.
+	 */
+	public static final class Id extends IntegerId
+	{
+		/**
+		 * @param value a server-side identifier
+		 */
+		private Id(int value)
+		{
+			super(value);
+		}
 	}
 }

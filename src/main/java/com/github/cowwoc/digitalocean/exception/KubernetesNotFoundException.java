@@ -1,5 +1,7 @@
 package com.github.cowwoc.digitalocean.exception;
 
+import com.github.cowwoc.digitalocean.resource.Kubernetes;
+
 import java.io.Serial;
 
 import static com.github.cowwoc.requirements10.java.DefaultJavaValidators.requireThat;
@@ -7,24 +9,22 @@ import static com.github.cowwoc.requirements10.java.DefaultJavaValidators.requir
 /**
  * Thrown if a referenced Kubernetes cluster could not be found.
  */
-public class KubernetesClusterNotFoundException extends Exception
+public final class KubernetesNotFoundException extends ResourceNotFoundException
 {
 	@Serial
 	private static final long serialVersionUID = 0L;
 	/**
 	 * The ID of the cluster that could not be found.
 	 */
-	private final String clusterId;
+	private transient final Kubernetes.Id clusterId;
 
 	/**
 	 * Creates a new instance.
 	 *
 	 * @param clusterId the ID of the cluster that could not be found
-	 * @throws NullPointerException     if {@code clusterId} is null
-	 * @throws IllegalArgumentException if {@code clusterId} contains leading or trailing whitespace or is
-	 *                                  empty
+	 * @throws NullPointerException if {@code clusterId} is null
 	 */
-	public KubernetesClusterNotFoundException(String clusterId)
+	public KubernetesNotFoundException(Kubernetes.Id clusterId)
 	{
 		super(getMessage(clusterId));
 		this.clusterId = clusterId;
@@ -34,13 +34,11 @@ public class KubernetesClusterNotFoundException extends Exception
 	 * Returns the exception message.
 	 *
 	 * @param clusterId the ID of the cluster that could not be found
-	 * @throws NullPointerException     if {@code clusterId} is null
-	 * @throws IllegalArgumentException if {@code clusterId} contains leading or trailing whitespace or is
-	 *                                  empty
+	 * @throws NullPointerException if {@code clusterId} is null
 	 */
-	private static String getMessage(String clusterId)
+	private static String getMessage(Kubernetes.Id clusterId)
 	{
-		requireThat(clusterId, "clusterId").isStripped().isNotEmpty();
+		requireThat(clusterId, "clusterId").isNotNull();
 		return "Cluster " + clusterId + " not found";
 	}
 
@@ -49,7 +47,7 @@ public class KubernetesClusterNotFoundException extends Exception
 	 *
 	 * @return the ID of the cluster
 	 */
-	public String getClusterId()
+	public Kubernetes.Id getClusterId()
 	{
 		return clusterId;
 	}

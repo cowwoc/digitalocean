@@ -2,22 +2,22 @@ package com.github.cowwoc.digitalocean.resource;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.github.cowwoc.digitalocean.client.DigitalOceanClient;
-import com.github.cowwoc.digitalocean.internal.util.ClientRequests;
-import com.github.cowwoc.digitalocean.internal.util.DigitalOceans;
+import com.github.cowwoc.digitalocean.internal.util.RetryDelay;
 import com.github.cowwoc.digitalocean.internal.util.ToStringBuilder;
 import org.eclipse.jetty.client.ContentResponse;
-import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.Request;
 
 import java.io.IOException;
+import java.net.URI;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Base64;
-import java.util.List;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Predicate;
 
-import static com.github.cowwoc.digitalocean.internal.util.DigitalOceans.REST_SERVER;
+import static com.github.cowwoc.digitalocean.internal.client.MainDigitalOceanClient.REST_SERVER;
 import static com.github.cowwoc.requirements10.java.DefaultJavaValidators.requireThat;
 import static org.eclipse.jetty.http.HttpMethod.GET;
 import static org.eclipse.jetty.http.HttpMethod.POST;
@@ -48,27 +48,31 @@ public final class DockerRegistry
 		throws IOException, TimeoutException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/registry_get
-		@SuppressWarnings("PMD.CloseResource")
-		HttpClient httpClient = client.getHttpClient();
-		ClientRequests clientRequests = client.getClientRequests();
-		String uri = REST_SERVER + "/v2/registry";
-		ContentResponse serverResponse = clientRequests.send(httpClient.newRequest(uri).
-			headers(headers -> headers.put("Content-Type", "application/json").
-				put("Authorization", "Bearer " + client.getAccessToken())).
-			method(GET));
-		requireThat(serverResponse.getStatus(), "responseCode").isEqualTo(OK_200);
+		Request request = client.createRequest(REST_SERVER.resolve("v2/registry")).
+			method(GET);
+		ContentResponse serverResponse = client.send(request);
+		switch (serverResponse.getStatus())
+		{
+			case OK_200 ->
+			{
+				// success
+			}
+			default -> throw new AssertionError("Unexpected response: " + client.toString(serverResponse) + "\n" +
+				"Request: " + client.toString(request));
+		}
 		JsonNode body = client.getObjectMapper().readTree(serverResponse.getContentAsString());
 		JsonNode registryNode = body.get("registry");
 		return getByJson(client, registryNode);
 	}
 
 	/**
-	 * Returns the docker registry.
+	 * Parses the JSON representation of this class.
 	 *
 	 * @param client the client configuration
-	 * @param json   the JSON representation of the registry
+	 * @param json   the JSON representation
 	 * @return the registry
-	 * @throws NullPointerException if any of the arguments are null
+	 * @throws NullPointerException     if any of the arguments are null
+	 * @throws IllegalArgumentException if the server response could not be parsed
 	 */
 	private static DockerRegistry getByJson(DigitalOceanClient client, JsonNode json)
 	{
@@ -76,7 +80,7 @@ public final class DockerRegistry
 		return new DockerRegistry(client, name);
 	}
 
-	private final DigitalOceanClient client;
+	final DigitalOceanClient client;
 	private final String name;
 
 	/**
@@ -93,68 +97,6 @@ public final class DockerRegistry
 		requireThat(name, "name").isStripped().isNotEmpty();
 		this.client = client;
 		this.name = name;
-	}
-
-	/**
-	 * Returns the image repositories in the registry.
-	 *
-	 * @return the repositories
-	 * @throws IllegalStateException if the client is closed
-	 * @throws IOException           if an I/O error occurs. These errors are typically transient, and retrying
-	 *                               the request may resolve the issue.
-	 * @throws TimeoutException      if the request times out before receiving a response. This might indicate
-	 *                               network latency or server overload.
-	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
-	 *                               due to shutdown signals.
-	 */
-	public List<DockerRepository> getRepositories() throws IOException, TimeoutException, InterruptedException
-	{
-		// https://docs.digitalocean.com/reference/api/api-reference/#operation/registry_list_repositoriesV2
-		String uri = REST_SERVER + "/v2/registry/" + name + "/repositoriesV2";
-		return DigitalOceans.getElements(client, uri, Map.of(), body ->
-		{
-			List<DockerRepository> repositories = new ArrayList<>();
-			for (JsonNode repository : body.get("repositories"))
-			{
-				String actualName = repository.get("name").textValue();
-				if (actualName.equals(name))
-					repositories.add(DockerRepository.getByJson(client, this, repository));
-			}
-			return repositories;
-		});
-	}
-
-	/**
-	 * Looks up an image repository by its name.
-	 *
-	 * @param name the name of the repository
-	 * @return null if the repository was not found
-	 * @throws NullPointerException     if {@code name} is null
-	 * @throws IllegalArgumentException if {@code name} contains leading or trailing whitespace or is empty
-	 * @throws IllegalStateException    if the client is closed
-	 * @throws IOException              if an I/O error occurs. These errors are typically transient, and
-	 *                                  retrying the request may resolve the issue.
-	 * @throws TimeoutException         if the request times out before receiving a response. This might
-	 *                                  indicate network latency or server overload.
-	 * @throws InterruptedException     if the thread is interrupted while waiting for a response. This can
-	 *                                  happen due to shutdown signals.
-	 */
-	public DockerRepository getRepositoryByName(String name)
-		throws IOException, TimeoutException, InterruptedException
-	{
-		requireThat(name, "name").isStripped().isNotEmpty();
-		// https://docs.digitalocean.com/reference/api/api-reference/#operation/registry_list_repositoriesV2
-		String uri = REST_SERVER + "/v2/registry/" + this.name + "/repositoriesV2";
-		return DigitalOceans.getElement(client, uri, Map.of(), body ->
-		{
-			for (JsonNode repository : body.get("repositories"))
-			{
-				String actualName = repository.get("name").textValue();
-				if (actualName.equals(name))
-					return DockerRepository.getByJson(client, this, repository);
-			}
-			return null;
-		});
 	}
 
 	/**
@@ -203,45 +145,38 @@ public final class DockerRegistry
 	public void deleteUnusedLayers() throws IOException, TimeoutException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/registry_run_garbageCollection
-		@SuppressWarnings("PMD.CloseResource")
-		HttpClient httpClient = client.getHttpClient();
-		ClientRequests clientRequests = client.getClientRequests();
-		String uri = REST_SERVER + "/v2/registry/" + name + "/garbage-collection";
-		Request request = httpClient.newRequest(uri).
-			headers(headers -> headers.put("Content-Type", "application/json").
-				put("Authorization", "Bearer " + client.getAccessToken())).
+		URI uri = REST_SERVER.resolve("v2/registry/" + name + "/garbage-collection");
+		Request request = client.createRequest(uri).
 			method(POST);
-		ContentResponse serverResponse = clientRequests.send(request);
+		ContentResponse serverResponse = client.send(request);
 		switch (serverResponse.getStatus())
 		{
 			case CREATED_201 ->
 			{
 				// success
 			}
-			default -> throw new AssertionError(
-				"Unexpected response: " + clientRequests.toString(serverResponse) + "\n" +
-					"Request: " + clientRequests.toString(request));
+			default -> throw new AssertionError("Unexpected response: " + client.toString(serverResponse) + "\n" +
+				"Request: " + client.toString(request));
 		}
-		JsonNode body = DigitalOceans.getResponseBody(client, serverResponse);
+		JsonNode body = client.getResponseBody(serverResponse);
 		JsonNode garbageCollection = body.get("garbage_collection");
 		String expectedUuid = garbageCollection.get("uuid").textValue();
 
+		uri = REST_SERVER.resolve("v2/registry/" + name + "/garbage-collection");
+		RetryDelay retryDelay = new RetryDelay(Duration.ofSeconds(3), Duration.ofSeconds(30), 2);
 		String actualUuid;
 		do
 		{
 			// https://docs.digitalocean.com/reference/api/api-reference/#operation/registry_get_garbageCollection
-			Thread.sleep(5000);
-			uri = REST_SERVER + "/v2/registry/" + name + "/garbage-collection";
-			request = httpClient.newRequest(uri).
-				headers(headers -> headers.put("Content-Type", "application/json").
-					put("Authorization", "Bearer " + client.getAccessToken())).
+			retryDelay.sleep();
+			request = client.createRequest(uri).
 				method(GET);
-			serverResponse = clientRequests.send(request);
+			serverResponse = client.send(request);
 			actualUuid = switch (serverResponse.getStatus())
 			{
 				case OK_200 ->
 				{
-					body = DigitalOceans.getResponseBody(client, serverResponse);
+					body = client.getResponseBody(serverResponse);
 					garbageCollection = body.get("garbage_collection");
 					yield garbageCollection.get("uuid").textValue();
 				}
@@ -250,10 +185,9 @@ public final class DockerRegistry
 					// Operation complete
 					yield "";
 				}
-				default -> throw new AssertionError(
-					"Unexpected response: " + clientRequests.toString(serverResponse) +
-						"\n" +
-						"Request: " + clientRequests.toString(request));
+				default -> throw new AssertionError("Unexpected response: " + client.toString(serverResponse) +
+					"\n" +
+					"Request: " + client.toString(request));
 			};
 		}
 		while (actualUuid.equals(expectedUuid));
@@ -281,29 +215,96 @@ public final class DockerRegistry
 		requireThat(duration, "duration").isGreaterThan(Duration.ZERO);
 
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/registry_get_dockerCredentials
-		@SuppressWarnings("PMD.CloseResource")
-		HttpClient httpClient = client.getHttpClient();
-		ClientRequests clientRequests = client.getClientRequests();
-		String uri = REST_SERVER + "/v2/registry/docker-credentials";
-		Request request = httpClient.newRequest(uri).
+		Request request = client.createRequest(REST_SERVER.resolve("v2/registry/docker-credentials")).
 			param("expiry_seconds", String.valueOf(Duration.ofMinutes(5).toSeconds())).
 			param("read_write", String.valueOf(writeAccess)).
-			headers(headers -> headers.put("Content-Type", "application/json").
-				put("Authorization", "Bearer " + client.getAccessToken())).
 			method(GET);
-		ContentResponse serverResponse = clientRequests.send(request);
+		ContentResponse serverResponse = client.send(request);
 		if (serverResponse.getStatus() != OK_200)
 		{
-			throw new AssertionError("Unexpected response: " + clientRequests.toString(serverResponse) + "\n" +
-				"Request: " + clientRequests.toString(request));
+			throw new AssertionError("Unexpected response: " + client.toString(serverResponse) + "\n" +
+				"Request: " + client.toString(request));
 		}
-		JsonNode body = DigitalOceans.getResponseBody(client, serverResponse);
+		JsonNode body = client.getResponseBody(serverResponse);
 		JsonNode authsNode = body.get("auths");
 		JsonNode registryNode = authsNode.get(getHostname());
 		String auth = registryNode.get("auth").textValue();
 		String decoded = new String(Base64.getDecoder().decode(auth));
 		String[] credentialTokens = decoded.split(":");
 		return new DockerCredentials(credentialTokens[0], credentialTokens[1]);
+	}
+
+	/**
+	 * Returns all the repositories in this registry.
+	 *
+	 * @return an empty set if no match is found
+	 * @throws IllegalStateException if the client is closed
+	 * @throws IOException           if an I/O error occurs. These errors are typically transient, and retrying
+	 *                               the request may resolve the issue.
+	 * @throws TimeoutException      if the request times out before receiving a response. This might indicate
+	 *                               network latency or server overload.
+	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
+	 *                               due to shutdown signals.
+	 */
+	public Set<DockerRepository> getRepositories()
+		throws IOException, TimeoutException, InterruptedException
+	{
+		// https://docs.digitalocean.com/reference/api/api-reference/#operation/registry_list_repositoriesV2
+		URI uri = REST_SERVER.resolve("v2/registry/" + name + "/repositoriesV2");
+		return client.getElements(uri, Map.of(), body ->
+		{
+			Set<DockerRepository> repositories = new HashSet<>();
+			for (JsonNode repository : body.get("repositories"))
+			{
+				String actualName = repository.get("name").textValue();
+				if (actualName.equals(name))
+					repositories.add(DockerRepository.getByJson(client, this, repository));
+			}
+			return repositories;
+		});
+	}
+
+	/**
+	 * Returns the first repository that matches a predicate.
+	 *
+	 * @param predicate the predicate
+	 * @return null if no match is found
+	 * @throws NullPointerException  if {@code predicate} is null
+	 * @throws IllegalStateException if the client is closed
+	 * @throws IOException           if an I/O error occurs. These errors are typically transient, and retrying
+	 *                               the request may resolve the issue.
+	 * @throws TimeoutException      if the request times out before receiving a response. This might indicate
+	 *                               network latency or server overload.
+	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
+	 *                               due to shutdown signals.
+	 */
+	public DockerRepository getRepositoryByPredicate(Predicate<DockerRepository> predicate)
+		throws IOException, TimeoutException, InterruptedException
+	{
+		// https://docs.digitalocean.com/reference/api/api-reference/#operation/registry_list_repositoriesV2
+		URI uri = REST_SERVER.resolve("v2/registry/" + name + "/repositoriesV2");
+		return client.getElement(uri, Map.of(), body ->
+		{
+			for (JsonNode repository : body.get("repositories"))
+			{
+				DockerRepository candidate = DockerRepository.getByJson(client, this, repository);
+				if (predicate.test(candidate))
+					return candidate;
+			}
+			return null;
+		});
+	}
+
+	@Override
+	public int hashCode()
+	{
+		return name.hashCode();
+	}
+
+	@Override
+	public boolean equals(Object o)
+	{
+		return o instanceof DockerRegistry other && other.name.equals(name);
 	}
 
 	@Override

@@ -2,6 +2,7 @@ package com.github.cowwoc.digitalocean.client;
 
 import com.github.cowwoc.digitalocean.internal.client.InternalClient;
 import com.github.cowwoc.digitalocean.internal.client.MainDigitalOceanClient;
+import com.github.cowwoc.digitalocean.resource.DropletMetadata;
 
 import static com.github.cowwoc.requirements10.java.DefaultJavaValidators.requireThat;
 
@@ -23,6 +24,16 @@ public interface DigitalOceanClient extends AutoCloseable, InternalClient
 	{
 		requireThat(accessToken, "accessToken").isNotNull();
 		return new MainDigitalOceanClient(accessToken);
+	}
+
+	/**
+	 * Returns a client for APIs that do not require an access token, such as {@link DropletMetadata}.
+	 *
+	 * @return an anonymous client
+	 */
+	static DigitalOceanClient anonymous()
+	{
+		return new MainDigitalOceanClient("anonymous");
 	}
 
 	/**

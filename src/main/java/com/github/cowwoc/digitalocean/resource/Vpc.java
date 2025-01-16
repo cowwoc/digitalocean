@@ -2,21 +2,93 @@ package com.github.cowwoc.digitalocean.resource;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.github.cowwoc.digitalocean.client.DigitalOceanClient;
-import com.github.cowwoc.digitalocean.internal.util.DigitalOceans;
+import com.github.cowwoc.digitalocean.id.StringId;
+import com.github.cowwoc.digitalocean.internal.util.Strings;
 import com.github.cowwoc.digitalocean.internal.util.ToStringBuilder;
 
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Predicate;
 
-import static com.github.cowwoc.digitalocean.internal.util.DigitalOceans.REST_SERVER;
+import static com.github.cowwoc.digitalocean.internal.client.MainDigitalOceanClient.REST_SERVER;
 import static com.github.cowwoc.requirements10.java.DefaultJavaValidators.requireThat;
 
 /**
- * A private network, otherwise known as a virtual private cloud (VPC).
+ * Represents a private network, also known as a Virtual Private Cloud (VPC).
+ * <p>
+ * VPCs are zone-specific, meaning they cannot secure communication between Droplets located in different
+ * zones.
+ *
+ * @see <a href="https://youtu.be/nbo5HrmZjXo?si=5Gf4hbticjw6nwph&t=2140">Configure a VPN to Extend a VPC
+ * 	Across Zones</a>
+ * @see <a
+ * 	href="https://www.digitalocean.com/community/developer-center/connect-digitalocean-droplets-across-regions">
+ * 	Connect DigitalOcean Droplets Across Regions</a>
+ * @see <a href="https://www.digitalocean.com/blog/vpc-peering-ga">VPC Peering</a>
  */
 public final class Vpc
 {
+	/**
+	 * Returns all the VPCs.
+	 *
+	 * @param client the client configuration
+	 * @return an empty set if no match is found
+	 * @throws NullPointerException  if {@code client} is null
+	 * @throws IllegalStateException if the client is closed
+	 * @throws IOException           if an I/O error occurs. These errors are typically transient, and retrying
+	 *                               the request may resolve the issue.
+	 * @throws TimeoutException      if the request times out before receiving a response. This might indicate
+	 *                               network latency or server overload.
+	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
+	 *                               due to shutdown signals.
+	 */
+	public static Set<Vpc> getAll(DigitalOceanClient client)
+		throws IOException, TimeoutException, InterruptedException
+	{
+		// https://docs.digitalocean.com/reference/api/api-reference/#operation/vpcs_list
+		return client.getElement(REST_SERVER.resolve("v2/vpcs"), Map.of(), body ->
+		{
+			Set<Vpc> vpcs = new HashSet<>();
+			for (JsonNode sshKey : body.get("vpcs"))
+				vpcs.add(getByJson(sshKey));
+			return vpcs;
+		});
+	}
+
+	/**
+	 * Returns the first VPC that matches a predicate.
+	 *
+	 * @param client    the client configuration
+	 * @param predicate the predicate
+	 * @return null if no match is found
+	 * @throws NullPointerException  if any of the arguments are null
+	 * @throws IllegalStateException if the client is closed
+	 * @throws IOException           if an I/O error occurs. These errors are typically transient, and retrying
+	 *                               the request may resolve the issue.
+	 * @throws TimeoutException      if the request times out before receiving a response. This might indicate
+	 *                               network latency or server overload.
+	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
+	 *                               due to shutdown signals.
+	 */
+	public static Vpc getByPredicate(DigitalOceanClient client, Predicate<Vpc> predicate)
+		throws IOException, TimeoutException, InterruptedException
+	{
+		// https://docs.digitalocean.com/reference/api/api-reference/#operation/vpcs_list
+		return client.getElement(REST_SERVER.resolve("v2/vpcs"), Map.of(), body ->
+		{
+			for (JsonNode projectNode : body.get("vpcs"))
+			{
+				Vpc candidate = getByJson(projectNode);
+				if (predicate.test(candidate))
+					return candidate;
+			}
+			return null;
+		});
+	}
+
 	/**
 	 * Looks up the default VPC of a zone.
 	 *
@@ -32,24 +104,21 @@ public final class Vpc
 	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
 	 *                               due to shutdown signals.
 	 */
-	public static Vpc getDefault(DigitalOceanClient client, Zone zone)
+	public static Vpc getDefault(DigitalOceanClient client, Zone.Id zone)
 		throws IOException, TimeoutException, InterruptedException
 	{
 		requireThat(zone, "zone").isNotNull();
 
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/vpcs_list
-		String uri = REST_SERVER + "/v2/vpcs";
-		return DigitalOceans.getElement(client, uri, Map.of(), body ->
+		return client.getElement(REST_SERVER.resolve("v2/vpcs"), Map.of(), body ->
 		{
-			// https://docs.digitalocean.com/reference/api/intro/#links--pagination
 			for (JsonNode vpc : body.get("vpcs"))
 			{
-				boolean isDefault = DigitalOceans.toBoolean(vpc.get("default"), "default");
+				boolean isDefault = client.getBoolean(vpc.get("default"), "default");
 				if (!isDefault)
 					continue;
-				String zoneAsSlug = vpc.get("region").textValue();
-				Zone actualZone = Zone.getBySlug(zoneAsSlug);
-				if (actualZone.equals(zone))
+				String zoneSlug = vpc.get("region").textValue();
+				if (zoneSlug.equals(zone.getValue()))
 					return getByJson(vpc);
 			}
 			return null;
@@ -63,7 +132,7 @@ public final class Vpc
 	 * @param id     the ID of the VPC
 	 * @return null if no match is found
 	 * @throws NullPointerException     if any of the arguments are null
-	 * @throws IllegalArgumentException if {@code id} contains leading or trailing whitespace or is empty
+	 * @throws IllegalArgumentException if {@code id} is not a valid UUID per RFC 9562
 	 * @throws IllegalStateException    if the client is closed
 	 * @throws IOException              if an I/O error occurs. These errors are typically transient, and
 	 *                                  retrying the request may resolve the issue.
@@ -75,49 +144,61 @@ public final class Vpc
 	public static Vpc getById(DigitalOceanClient client, String id)
 		throws IOException, TimeoutException, InterruptedException
 	{
-		requireThat(id, "id").isStripped().isNotEmpty();
+		// regex taken from https://docs.digitalocean.com/reference/api/api-reference/#operation/databases_create_cluster
+		requireThat(id, "id").matches(Strings.UUID);
 
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/vpcs_get
-		String uri = REST_SERVER + "/v2/vpcs/" + id;
-		return DigitalOceans.getElement(client, uri, Map.of(), body ->
+		return client.getResource(REST_SERVER.resolve("v2/vpcs/" + id), body ->
 		{
-			JsonNode vpc = body.get("vpc");
-			return getByJson(vpc);
+			JsonNode droplet = body.get("vpc");
+			return getByJson(droplet);
 		});
 	}
 
 	/**
-	 * @param json the JSON representation of the VPC
+	 * Parses the JSON representation of this class.
+	 *
+	 * @param json the JSON representation
 	 * @return the VPC
-	 * @throws NullPointerException if {@code json} is null
+	 * @throws NullPointerException     if {@code json} is null
+	 * @throws IllegalArgumentException if the server response could not be parsed
 	 */
 	private static Vpc getByJson(JsonNode json)
 	{
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/vpcs_get
-		String id = json.get("id").textValue();
-		String zoneAsString = json.get("region").textValue();
-		Zone zone = Zone.getBySlug(zoneAsString);
+		Id id = id(json.get("id").textValue());
+		String zoneSlug = json.get("region").textValue();
+		Zone.Id zone = Zone.id(zoneSlug);
 		return new Vpc(id, zone);
 	}
 
-	private final String id;
-	private final Zone zone;
+	/**
+	 * Creates a new ID.
+	 *
+	 * @param value the server-side identifier (slug)
+	 * @return the type-safe identifier for the resource
+	 * @throws IllegalArgumentException if {@code value} contains leading or trailing whitespace or is empty
+	 */
+	public static Id id(String value)
+	{
+		if (value == null)
+			return null;
+		return new Id(value);
+	}
+
+	private final Id id;
+	private final Zone.Id zone;
 
 	/**
 	 * Creates a new VPC.
 	 *
 	 * @param id   the ID of the VPC
 	 * @param zone the zone that the VPC is in
-	 * @throws NullPointerException     if any of the arguments are null
-	 * @throws IllegalArgumentException if:
-	 *                                  <ul>
-	 *                                    <li>any of the arguments contain leading or trailing whitespace</li>
-	 *                                    <li>any of the mandatory arguments are empty</li>
-	 *                                  </ul>
+	 * @throws NullPointerException if any of the arguments are null
 	 */
-	private Vpc(String id, Zone zone)
+	private Vpc(Id id, Zone.Id zone)
 	{
-		requireThat(id, "id").isStripped().isNotEmpty();
+		requireThat(id, "id").isNotNull();
 		requireThat(zone, "zone").isNotNull();
 		this.id = id;
 		this.zone = zone;
@@ -128,7 +209,7 @@ public final class Vpc
 	 *
 	 * @return the id
 	 */
-	public String getId()
+	public Id getId()
 	{
 		return id;
 	}
@@ -136,9 +217,9 @@ public final class Vpc
 	/**
 	 * Returns the zone that the VPC is in.
 	 *
-	 * @return the zone that the VPC is in
+	 * @return the zone
 	 */
-	public Zone getZone()
+	public Zone.Id getZone()
 	{
 		return zone;
 	}
@@ -162,5 +243,24 @@ public final class Vpc
 			add("id", id).
 			add("zone", zone).
 			toString();
+	}
+
+	/**
+	 * A type-safe identifier for this type of resource.
+	 * <p>
+	 * This adds type-safety to API methods by ensuring that IDs specific to one class cannot be used in place
+	 * of IDs belonging to another class.
+	 */
+	public static final class Id extends StringId
+	{
+		/**
+		 * @param value a server-side identifier
+		 * @throws NullPointerException     if {@code value} is null
+		 * @throws IllegalArgumentException if {@code value} contains leading or trailing whitespace or is empty
+		 */
+		private Id(String value)
+		{
+			super(value);
+		}
 	}
 }
