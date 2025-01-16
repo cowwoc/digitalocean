@@ -1,0 +1,6 @@
+module:com.github.cowwoc.digitalocean
+com.github.cowwoc.digitalocean.client
+com.github.cowwoc.digitalocean.exception
+com.github.cowwoc.digitalocean.id
+com.github.cowwoc.digitalocean.resource
+com.github.cowwoc.digitalocean.util
