@@ -60,7 +60,7 @@ public final class DockerRegistry
 			default -> throw new AssertionError("Unexpected response: " + client.toString(serverResponse) + "\n" +
 				"Request: " + client.toString(request));
 		}
-		JsonNode body = client.getObjectMapper().readTree(serverResponse.getContentAsString());
+		JsonNode body = client.getJsonMapper().readTree(serverResponse.getContentAsString());
 		JsonNode registryNode = body.get("registry");
 		return getByJson(client, registryNode);
 	}

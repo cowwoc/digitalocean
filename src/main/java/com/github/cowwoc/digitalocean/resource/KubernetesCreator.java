@@ -1,7 +1,7 @@
 package com.github.cowwoc.digitalocean.resource;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.cowwoc.digitalocean.client.DigitalOceanClient;
@@ -369,8 +369,8 @@ public final class KubernetesCreator
 		throws IOException, TimeoutException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/kubernetes_create_cluster
-		ObjectMapper om = client.getObjectMapper();
-		ObjectNode requestBody = om.createObjectNode().
+		JsonMapper jm = client.getJsonMapper();
+		ObjectNode requestBody = jm.createObjectNode().
 			put("name", name).
 			put("region", zone.getValue()).
 			put("version", version.toJson());
@@ -733,7 +733,7 @@ public final class KubernetesCreator
 		 */
 		public ObjectNode toJson()
 		{
-			ObjectNode json = client.getObjectMapper().createObjectNode().
+			ObjectNode json = client.getJsonMapper().createObjectNode().
 				put("size", dropletType.getValue()).
 				put("name", name).
 				put("count", initialNumberOfNodes);

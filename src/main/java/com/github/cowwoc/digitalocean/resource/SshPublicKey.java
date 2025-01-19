@@ -1,7 +1,7 @@
 package com.github.cowwoc.digitalocean.resource;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.cowwoc.digitalocean.client.DigitalOceanClient;
 import com.github.cowwoc.digitalocean.id.IntegerId;
@@ -215,7 +215,7 @@ public final class SshPublicKey
 		requireThat(value, "value").isNotNull();
 
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/sshKeys_create
-		ObjectMapper om = client.getObjectMapper();
+		JsonMapper jm = client.getJsonMapper();
 		SshKeys sshKeys = new SshKeys();
 		String openSshRepresentation;
 		try (ByteArrayOutputStream out = new ByteArrayOutputStream())
@@ -229,7 +229,7 @@ public final class SshPublicKey
 			throw new AssertionError(e);
 		}
 
-		ObjectNode requestBody = om.createObjectNode().
+		ObjectNode requestBody = jm.createObjectNode().
 			put("name", name).
 			put("public_key", openSshRepresentation);
 

@@ -1,7 +1,7 @@
 package com.github.cowwoc.digitalocean.internal.client;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.github.cowwoc.digitalocean.internal.util.JsonToObject;
 import com.github.cowwoc.pouch.core.WrappedCheckedException;
 import org.eclipse.jetty.client.ContentResponse;
@@ -22,12 +22,12 @@ import java.util.concurrent.TimeoutException;
 public interface InternalClient
 {
 	/**
-	 * Returns the JSON configuration.
+	 * Returns a JSON mapper.
 	 *
-	 * @return the JSON configuration
+	 * @return the JSON mapper
 	 * @throws IllegalStateException if the client is closed
 	 */
-	ObjectMapper getObjectMapper();
+	JsonMapper getJsonMapper();
 
 	/**
 	 * Creates a request without a body and sets the {@code Authorization} header.

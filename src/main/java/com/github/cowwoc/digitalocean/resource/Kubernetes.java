@@ -1,7 +1,7 @@
 package com.github.cowwoc.digitalocean.resource;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.cowwoc.digitalocean.client.DigitalOceanClient;
@@ -547,8 +547,8 @@ public final class Kubernetes
 		if (matches(target))
 			return;
 
-		ObjectMapper om = client.getObjectMapper();
-		ObjectNode requestBody = om.createObjectNode();
+		JsonMapper jm = client.getJsonMapper();
+		ObjectNode requestBody = jm.createObjectNode();
 		requestBody.put("name", target.name());
 		if (!target.tags().equals(tags))
 		{
@@ -1350,7 +1350,7 @@ public final class Kubernetes
 		 */
 		public ObjectNode toJson()
 		{
-			ObjectNode json = client.getObjectMapper().createObjectNode();
+			ObjectNode json = client.getJsonMapper().createObjectNode();
 			OffsetTime startTimeAtUtc = startTime.withOffsetSameInstant(ZoneOffset.UTC);
 			json.put("start_time", Strings.HOUR_MINUTE.format(startTimeAtUtc));
 			if (day == null)

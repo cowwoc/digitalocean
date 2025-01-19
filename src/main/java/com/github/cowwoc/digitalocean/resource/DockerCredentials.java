@@ -1,6 +1,6 @@
 package com.github.cowwoc.digitalocean.resource;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.util.Base64;
@@ -34,12 +34,12 @@ public record DockerCredentials(String username, String password)
 	/**
 	 * Returns the base64 encoded representation of the credentials.
 	 *
-	 * @param objectMapper an instance of {@code ObjectMapper}
+	 * @param jsonMapper a {@code JsonMapper}
 	 * @return the base64 encoded representation
 	 */
-	public String asBase64Encoded(ObjectMapper objectMapper)
+	public String asBase64Encoded(JsonMapper jsonMapper)
 	{
-		ObjectNode auth = objectMapper.createObjectNode();
+		ObjectNode auth = jsonMapper.createObjectNode();
 		auth.put("username", username);
 		auth.put("password", password);
 		return Base64.getEncoder().encodeToString(auth.toString().getBytes(UTF_8));

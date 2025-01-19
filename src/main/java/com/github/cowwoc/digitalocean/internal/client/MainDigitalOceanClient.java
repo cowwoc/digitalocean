@@ -2,7 +2,6 @@ package com.github.cowwoc.digitalocean.internal.client;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -100,7 +99,7 @@ public class MainDigitalOceanClient implements DigitalOceanClient
 	private static final String MAX_ENTRIES_PER_PAGE = "200";
 	private final String accessToken;
 	private final HttpClientFactory httpClient;
-	private final ObjectMapper objectMapper = JsonMapper.builder().
+	private final JsonMapper jsonMapper = JsonMapper.builder().
 		addModule(new JavaTimeModule()).
 		disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS).
 		build();
@@ -126,10 +125,10 @@ public class MainDigitalOceanClient implements DigitalOceanClient
 	}
 
 	@Override
-	public ObjectMapper getObjectMapper()
+	public JsonMapper getJsonMapper()
 	{
 		ensureOpen();
-		return objectMapper;
+		return jsonMapper;
 	}
 
 	@Override
@@ -160,7 +159,7 @@ public class MainDigitalOceanClient implements DigitalOceanClient
 		String requestBodyAsString;
 		try
 		{
-			requestBodyAsString = getObjectMapper().writeValueAsString(body);
+			requestBodyAsString = getJsonMapper().writeValueAsString(body);
 		}
 		catch (JsonProcessingException e)
 		{
@@ -176,7 +175,7 @@ public class MainDigitalOceanClient implements DigitalOceanClient
 		ensureOpen();
 		try
 		{
-			return getObjectMapper().readTree(serverResponse.getContentAsString());
+			return getJsonMapper().readTree(serverResponse.getContentAsString());
 		}
 		catch (JsonProcessingException e)
 		{

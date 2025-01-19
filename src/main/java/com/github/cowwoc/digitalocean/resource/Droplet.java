@@ -1,7 +1,7 @@
 package com.github.cowwoc.digitalocean.resource;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.cowwoc.digitalocean.client.DigitalOceanClient;
 import com.github.cowwoc.digitalocean.id.IntegerId;
@@ -431,8 +431,8 @@ public final class Droplet
 		requireThat(newName, "newName").isStripped().isNotEmpty();
 
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/dropletActions_post
-		ObjectMapper om = client.getObjectMapper();
-		ObjectNode requestBody = om.createObjectNode().
+		JsonMapper jm = client.getJsonMapper();
+		ObjectNode requestBody = jm.createObjectNode().
 			put("type", "rename").
 			put("name", newName);
 		Request request = client.createRequest(REST_SERVER.resolve("v2/droplets/" + id + "/actions"),

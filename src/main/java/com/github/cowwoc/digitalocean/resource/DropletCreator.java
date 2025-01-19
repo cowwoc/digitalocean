@@ -1,7 +1,7 @@
 package com.github.cowwoc.digitalocean.resource;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.cowwoc.digitalocean.client.DigitalOceanClient;
@@ -366,8 +366,8 @@ public final class DropletCreator
 		throws PermissionDeniedException, IOException, TimeoutException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/droplets_create
-		ObjectMapper om = client.getObjectMapper();
-		ObjectNode requestBody = om.createObjectNode().
+		JsonMapper jm = client.getJsonMapper();
+		ObjectNode requestBody = jm.createObjectNode().
 			put("name", name).
 			put("size", type.toString()).
 			put("image", image.getId().getValue());
@@ -421,7 +421,7 @@ public final class DropletCreator
 			default -> throw new AssertionError("Unexpected response: " + client.toString(serverResponse) + "\n" +
 				"Request: " + client.toString(request));
 		}
-		JsonNode body = client.getObjectMapper().readTree(responseAsString);
+		JsonNode body = client.getJsonMapper().readTree(responseAsString);
 		JsonNode dropletNode = body.get("droplet");
 		if (dropletNode == null)
 		{
@@ -543,7 +543,7 @@ public final class DropletCreator
 		 */
 		public ObjectNode toJson()
 		{
-			ObjectNode json = client.getObjectMapper().createObjectNode();
+			ObjectNode json = client.getJsonMapper().createObjectNode();
 			OffsetTime hourAtUtc = hour.withOffsetSameInstant(ZoneOffset.UTC);
 			json.put("hour", Strings.HOUR_MINUTE_SECOND.format(hourAtUtc));
 			json.put("day", day.name().toLowerCase(Locale.ROOT));

@@ -1,7 +1,7 @@
 package com.github.cowwoc.digitalocean.resource;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.cowwoc.digitalocean.client.DigitalOceanClient;
@@ -369,8 +369,8 @@ public final class DatabaseCreator
 		throws PermissionDeniedException, IOException, TimeoutException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/databases_create_cluster
-		ObjectMapper om = client.getObjectMapper();
-		ObjectNode requestBody = om.createObjectNode().
+		JsonMapper jm = client.getJsonMapper();
+		ObjectNode requestBody = jm.createObjectNode().
 			put("name", name).
 			put("engine", databaseType.getSlug()).
 			put("num_nodes", numberOfStandbyNodes + 1).
@@ -538,7 +538,7 @@ public final class DatabaseCreator
 		 */
 		public ObjectNode toJson()
 		{
-			ObjectNode json = client.getObjectMapper().createObjectNode();
+			ObjectNode json = client.getJsonMapper().createObjectNode();
 			if (!id.isEmpty())
 				json.put("uuid", id);
 			json.put("type", resourceType.name().toLowerCase(Locale.ROOT));
@@ -604,7 +604,7 @@ public final class DatabaseCreator
 		 */
 		public ObjectNode toJson()
 		{
-			ObjectNode json = client.getObjectMapper().createObjectNode();
+			ObjectNode json = client.getJsonMapper().createObjectNode();
 			json.put("database_name", databaseName);
 			json.put("backup_created_at", createdAt.toString());
 			return json;
@@ -651,7 +651,7 @@ public final class DatabaseCreator
 		 */
 		public ObjectNode toJson()
 		{
-			ObjectNode json = client.getObjectMapper().createObjectNode();
+			ObjectNode json = client.getJsonMapper().createObjectNode();
 			OffsetTime hourAtUtc = hour.withOffsetSameInstant(ZoneOffset.UTC);
 			json.put("hour", Strings.HOUR_MINUTE.format(hourAtUtc));
 			json.put("day", day.name().toLowerCase(Locale.ROOT));
