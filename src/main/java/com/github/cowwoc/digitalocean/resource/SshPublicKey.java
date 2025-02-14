@@ -9,6 +9,7 @@ import com.github.cowwoc.digitalocean.internal.util.SshKeys;
 import com.github.cowwoc.digitalocean.internal.util.ToStringBuilder;
 import org.eclipse.jetty.client.ContentResponse;
 import org.eclipse.jetty.client.Request;
+import org.eclipse.jetty.client.Response;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -235,7 +236,7 @@ public final class SshPublicKey
 
 		Request request = client.createRequest(REST_SERVER.resolve("v2/account/keys"), requestBody).
 			method(POST);
-		ContentResponse serverResponse = client.send(request);
+		Response serverResponse = client.send(request);
 		switch (serverResponse.getStatus())
 		{
 			case CREATED_201 ->
@@ -245,7 +246,8 @@ public final class SshPublicKey
 			default -> throw new AssertionError("Unexpected response: " + client.toString(serverResponse) + "\n" +
 				"Request: " + client.toString(request));
 		}
-		JsonNode body = client.getResponseBody(serverResponse);
+		ContentResponse contentResponse = (ContentResponse) serverResponse;
+		JsonNode body = client.getResponseBody(contentResponse);
 		JsonNode responseId = body.get("id");
 		if (responseId != null && responseId.textValue().equals("unprocessable_entity"))
 		{

@@ -11,6 +11,7 @@ import com.github.cowwoc.digitalocean.internal.util.ToStringBuilder;
 import com.github.cowwoc.requirements10.annotation.CheckReturnValue;
 import org.eclipse.jetty.client.ContentResponse;
 import org.eclipse.jetty.client.Request;
+import org.eclipse.jetty.client.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -622,7 +623,7 @@ public final class Database
 		URI uri = REST_SERVER.resolve("v2/databases/" + id + "/maintenance");
 		Request request = client.createRequest(uri, maintenanceSchedule.toJson()).
 			method(PUT);
-		ContentResponse serverResponse = client.send(request);
+		Response serverResponse = client.send(request);
 		switch (serverResponse.getStatus())
 		{
 			case NO_CONTENT_204 ->
@@ -769,7 +770,7 @@ public final class Database
 		{
 			Request request = client.createRequest(uri).
 				method(GET);
-			ContentResponse serverResponse = client.send(request);
+			Response serverResponse = client.send(request);
 			switch (serverResponse.getStatus())
 			{
 				case OK_200 ->
@@ -780,7 +781,8 @@ public final class Database
 				default -> throw new AssertionError("Unexpected response: " + client.toString(serverResponse) + "\n" +
 					"Request: " + client.toString(request));
 			}
-			JsonNode body = client.getResponseBody(serverResponse);
+			ContentResponse contentResponse = (ContentResponse) serverResponse;
+			JsonNode body = client.getResponseBody(contentResponse);
 			Database newCluster = getByJson(client, body.get("database"));
 			if (newCluster.getState().equals(state))
 			{
@@ -824,7 +826,7 @@ public final class Database
 		{
 			Request request = client.createRequest(uri).
 				method(GET);
-			ContentResponse serverResponse = client.send(request);
+			Response serverResponse = client.send(request);
 			switch (serverResponse.getStatus())
 			{
 				case OK_200 ->
@@ -840,7 +842,8 @@ public final class Database
 				default -> throw new AssertionError("Unexpected response: " + client.toString(serverResponse) + "\n" +
 					"Request: " + client.toString(request));
 			}
-			JsonNode body = client.getResponseBody(serverResponse);
+			ContentResponse contentResponse = (ContentResponse) serverResponse;
+			JsonNode body = client.getResponseBody(contentResponse);
 			Database newCluster = getByJson(client, body.get("database"));
 			if (!timeLimit.getTimeLeft().isPositive())
 				throw new TimeoutException("Operation failed after " + timeLimit.getTimeQuota());

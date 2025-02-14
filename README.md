@@ -23,7 +23,7 @@ To get started, add this Maven dependency:
 
 ```java
 import com.github.cowwoc.digitalocean.client.DigitalOceanClient;
-import com.github.cowwoc.digitalocean.exception.PermissionDeniedException;
+import com.github.cowwoc.digitalocean.exception.AccessDeniedException;
 import com.github.cowwoc.digitalocean.resource.Droplet;
 import com.github.cowwoc.digitalocean.resource.DropletImage;
 import com.github.cowwoc.digitalocean.resource.DropletType;
@@ -36,26 +36,26 @@ import java.util.concurrent.TimeoutException;
 
 class Example
 {
-  public static void main(String[] args)
-    throws PermissionDeniedException, IOException, TimeoutException, InterruptedException
-  {
-    Region region = Region.NEW_YORK;
-    try (DigitalOceanClient client = DigitalOceanClient.using("MY_ACCESS_TOKEN"))
-    {
-      DropletImage image = DropletImage.getBySlug(client, "debian-12-x64");
-      Zone zone = region.getZones(client).iterator().next();
-      
-      // Get the least expensive droplet type with at least 2 GiB of memory
-      DropletType dropletType = DropletType.getAll(client).stream().filter(type ->
-        type.getZones().contains(zone.getId()) && type.getRamInMiB() >= 2 * 1024).
-        min(Comparator.comparing(DropletType::getPricePerHour)).orElseThrow();
-      
-      Droplet droplet = Droplet.creator(client, "Node123", dropletType.getId(), image).create();
-      while (droplet.getAddresses().isEmpty())
-        Thread.sleep(1000);
-      System.out.println("The droplet's address is: " + droplet.getAddresses().iterator().next());
-    }
-  }
+	public static void main(String[] args)
+		throws AccessDeniedException, IOException, TimeoutException, InterruptedException
+	{
+		Region region = Region.NEW_YORK;
+		try (DigitalOceanClient client = DigitalOceanClient.using("MY_ACCESS_TOKEN"))
+		{
+			DropletImage image = DropletImage.getBySlug(client, "debian-12-x64");
+			Zone zone = region.getZones(client).iterator().next();
+
+			// Get the least expensive droplet type with at least 2 GiB of memory
+			DropletType dropletType = DropletType.getAll(client).stream().filter(type ->
+					type.getZones().contains(zone.getId()) && type.getRamInMiB() >= 2 * 1024).
+				min(Comparator.comparing(DropletType::getPricePerHour)).orElseThrow();
+
+			Droplet droplet = Droplet.creator(client, "Node123", dropletType.getId(), image).create();
+			while (droplet.getAddresses().isEmpty())
+				Thread.sleep(1000);
+			System.out.println("The droplet's address is: " + droplet.getAddresses().iterator().next());
+		}
+	}
 }
 ```
 

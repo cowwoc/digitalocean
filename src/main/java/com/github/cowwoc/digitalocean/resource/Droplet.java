@@ -9,6 +9,7 @@ import com.github.cowwoc.digitalocean.internal.util.ToStringBuilder;
 import com.github.cowwoc.requirements10.annotation.CheckReturnValue;
 import org.eclipse.jetty.client.ContentResponse;
 import org.eclipse.jetty.client.Request;
+import org.eclipse.jetty.client.Response;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -437,7 +438,7 @@ public final class Droplet
 			put("name", newName);
 		Request request = client.createRequest(REST_SERVER.resolve("v2/droplets/" + id + "/actions"),
 			requestBody);
-		ContentResponse serverResponse = client.send(request);
+		Response serverResponse = client.send(request);
 		switch (serverResponse.getStatus())
 		{
 			case CREATED_201 ->
@@ -447,7 +448,8 @@ public final class Droplet
 			default -> throw new AssertionError("Unexpected response: " + client.toString(serverResponse) + "\n" +
 				"Request: " + client.toString(request));
 		}
-		JsonNode responseBody = client.getResponseBody(serverResponse);
+		ContentResponse contentResponse = (ContentResponse) serverResponse;
+		JsonNode responseBody = client.getResponseBody(contentResponse);
 		String status = responseBody.get("status").textValue();
 		while (status.equals("in-progress"))
 		{

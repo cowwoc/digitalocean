@@ -10,6 +10,7 @@ import com.github.cowwoc.digitalocean.resource.Kubernetes.MaintenanceSchedule;
 import com.github.cowwoc.digitalocean.util.CreateResult;
 import org.eclipse.jetty.client.ContentResponse;
 import org.eclipse.jetty.client.Request;
+import org.eclipse.jetty.client.Response;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -393,18 +394,20 @@ public final class KubernetesCreator
 			requestBody.put("ha", true);
 		Request request = client.createRequest(REST_SERVER.resolve("v2/kubernetes/clusters"), requestBody).
 			method(POST);
-		ContentResponse serverResponse = client.send(request);
+		Response serverResponse = client.send(request);
 		return switch (serverResponse.getStatus())
 		{
 			case CREATED_201 ->
 			{
-				JsonNode body = client.getResponseBody(serverResponse);
+				ContentResponse contentResponse = (ContentResponse) serverResponse;
+				JsonNode body = client.getResponseBody(contentResponse);
 				yield CreateResult.created(Kubernetes.getByJson(client, body.get("kubernetes_cluster")));
 			}
 			case UNPROCESSABLE_ENTITY_422 ->
 			{
 				// Example: "a cluster with this name already exists"
-				JsonNode json = client.getResponseBody(serverResponse);
+				ContentResponse contentResponse = (ContentResponse) serverResponse;
+				JsonNode json = client.getResponseBody(contentResponse);
 				String message = json.get("message").textValue();
 				if (message.equals("a cluster with this name already exists"))
 				{

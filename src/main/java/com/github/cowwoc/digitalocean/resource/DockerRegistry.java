@@ -2,10 +2,12 @@ package com.github.cowwoc.digitalocean.resource;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.github.cowwoc.digitalocean.client.DigitalOceanClient;
+import com.github.cowwoc.digitalocean.exception.AccessDeniedException;
 import com.github.cowwoc.digitalocean.internal.util.RetryDelay;
 import com.github.cowwoc.digitalocean.internal.util.ToStringBuilder;
 import org.eclipse.jetty.client.ContentResponse;
 import org.eclipse.jetty.client.Request;
+import org.eclipse.jetty.client.Response;
 
 import java.io.IOException;
 import java.net.URI;
@@ -24,6 +26,7 @@ import static org.eclipse.jetty.http.HttpMethod.POST;
 import static org.eclipse.jetty.http.HttpStatus.CREATED_201;
 import static org.eclipse.jetty.http.HttpStatus.NOT_FOUND_404;
 import static org.eclipse.jetty.http.HttpStatus.OK_200;
+import static org.eclipse.jetty.http.HttpStatus.UNAUTHORIZED_401;
 
 /**
  * A registry of docker repositories.
@@ -43,24 +46,32 @@ public final class DockerRegistry
 	 *                               network latency or server overload.
 	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
 	 *                               due to shutdown signals.
+	 * @throws AccessDeniedException if the client does not have access to the registry
 	 */
 	public static DockerRegistry get(DigitalOceanClient client)
-		throws IOException, TimeoutException, InterruptedException
+		throws IOException, TimeoutException, InterruptedException, AccessDeniedException
 	{
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/registry_get
 		Request request = client.createRequest(REST_SERVER.resolve("v2/registry")).
 			method(GET);
-		ContentResponse serverResponse = client.send(request);
+		Response serverResponse = client.send(request);
 		switch (serverResponse.getStatus())
 		{
 			case OK_200 ->
 			{
 				// success
 			}
+			case UNAUTHORIZED_401 ->
+			{
+				ContentResponse contentResponse = (ContentResponse) serverResponse;
+				JsonNode json = client.getResponseBody(contentResponse);
+				throw new AccessDeniedException(json.get("message").textValue());
+			}
 			default -> throw new AssertionError("Unexpected response: " + client.toString(serverResponse) + "\n" +
 				"Request: " + client.toString(request));
 		}
-		JsonNode body = client.getJsonMapper().readTree(serverResponse.getContentAsString());
+		ContentResponse contentResponse = (ContentResponse) serverResponse;
+		JsonNode body = client.getJsonMapper().readTree(contentResponse.getContentAsString());
 		JsonNode registryNode = body.get("registry");
 		return getByJson(client, registryNode);
 	}
@@ -148,7 +159,7 @@ public final class DockerRegistry
 		URI uri = REST_SERVER.resolve("v2/registry/" + name + "/garbage-collection");
 		Request request = client.createRequest(uri).
 			method(POST);
-		ContentResponse serverResponse = client.send(request);
+		Response serverResponse = client.send(request);
 		switch (serverResponse.getStatus())
 		{
 			case CREATED_201 ->
@@ -158,7 +169,8 @@ public final class DockerRegistry
 			default -> throw new AssertionError("Unexpected response: " + client.toString(serverResponse) + "\n" +
 				"Request: " + client.toString(request));
 		}
-		JsonNode body = client.getResponseBody(serverResponse);
+		ContentResponse contentResponse = (ContentResponse) serverResponse;
+		JsonNode body = client.getResponseBody(contentResponse);
 		JsonNode garbageCollection = body.get("garbage_collection");
 		String expectedUuid = garbageCollection.get("uuid").textValue();
 
@@ -176,7 +188,8 @@ public final class DockerRegistry
 			{
 				case OK_200 ->
 				{
-					body = client.getResponseBody(serverResponse);
+					contentResponse = (ContentResponse) serverResponse;
+					body = client.getResponseBody(contentResponse);
 					garbageCollection = body.get("garbage_collection");
 					yield garbageCollection.get("uuid").textValue();
 				}
@@ -216,16 +229,17 @@ public final class DockerRegistry
 
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/registry_get_dockerCredentials
 		Request request = client.createRequest(REST_SERVER.resolve("v2/registry/docker-credentials")).
-			param("expiry_seconds", String.valueOf(Duration.ofMinutes(5).toSeconds())).
+			param("expiry_seconds", String.valueOf(duration.toSeconds())).
 			param("read_write", String.valueOf(writeAccess)).
 			method(GET);
-		ContentResponse serverResponse = client.send(request);
+		Response serverResponse = client.send(request);
 		if (serverResponse.getStatus() != OK_200)
 		{
 			throw new AssertionError("Unexpected response: " + client.toString(serverResponse) + "\n" +
 				"Request: " + client.toString(request));
 		}
-		JsonNode body = client.getResponseBody(serverResponse);
+		ContentResponse contentResponse = (ContentResponse) serverResponse;
+		JsonNode body = client.getResponseBody(contentResponse);
 		JsonNode authsNode = body.get("auths");
 		JsonNode registryNode = authsNode.get(getHostname());
 		String auth = registryNode.get("auth").textValue();

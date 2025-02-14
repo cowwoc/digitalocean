@@ -5,13 +5,13 @@ import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.cowwoc.digitalocean.client.DigitalOceanClient;
-import com.github.cowwoc.digitalocean.exception.PermissionDeniedException;
+import com.github.cowwoc.digitalocean.exception.AccessDeniedException;
 import com.github.cowwoc.digitalocean.internal.util.Strings;
 import com.github.cowwoc.digitalocean.internal.util.ToStringBuilder;
 import com.github.cowwoc.digitalocean.util.CreateResult;
 import org.eclipse.jetty.client.ContentResponse;
 import org.eclipse.jetty.client.Request;
-import org.slf4j.LoggerFactory;
+import org.eclipse.jetty.client.Response;
 
 import java.io.IOException;
 import java.time.DayOfWeek;
@@ -355,18 +355,18 @@ public final class DatabaseCreator
 	 * Creates a new database cluster.
 	 *
 	 * @return the new or conflicting cluster
-	 * @throws IllegalArgumentException  if the {@code dropletType} is not supported by managed databases
-	 * @throws IllegalStateException     if the client is closed
-	 * @throws PermissionDeniedException if the request exceeded the client's droplet limit
-	 * @throws IOException               if an I/O error occurs. These errors are typically transient, and
-	 *                                   retrying the request may resolve the issue.
-	 * @throws TimeoutException          if the request times out before receiving a response. This might
-	 *                                   indicate network latency or server overload.
-	 * @throws InterruptedException      if the thread is interrupted while waiting for a response. This can
-	 *                                   happen due to shutdown signals.
+	 * @throws IllegalArgumentException if the {@code dropletType} is not supported by managed databases
+	 * @throws IllegalStateException    if the client is closed
+	 * @throws AccessDeniedException    if the request exceeded the client's droplet limit
+	 * @throws IOException              if an I/O error occurs. These errors are typically transient, and
+	 *                                  retrying the request may resolve the issue.
+	 * @throws TimeoutException         if the request times out before receiving a response. This might
+	 *                                  indicate network latency or server overload.
+	 * @throws InterruptedException     if the thread is interrupted while waiting for a response. This can
+	 *                                  happen due to shutdown signals.
 	 */
 	public CreateResult<Database> create()
-		throws PermissionDeniedException, IOException, TimeoutException, InterruptedException
+		throws AccessDeniedException, IOException, TimeoutException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/databases_create_cluster
 		JsonMapper jm = client.getJsonMapper();
@@ -401,21 +401,20 @@ public final class DatabaseCreator
 
 		Request request = client.createRequest(REST_SERVER.resolve("v2/databases"), requestBody).
 			method(POST);
-		ContentResponse serverResponse = client.send(request);
+		Response serverResponse = client.send(request);
 		return switch (serverResponse.getStatus())
 		{
 			case CREATED_201 ->
 			{
-				JsonNode body = client.getResponseBody(serverResponse);
+				ContentResponse contentResponse = (ContentResponse) serverResponse;
+				JsonNode body = client.getResponseBody(contentResponse);
 				yield CreateResult.created(Database.getByJson(client, body.get("database")));
 			}
 			case UNPROCESSABLE_ENTITY_422 ->
 			{
 				// Discovered empirically: not all droplet types are acceptable.
-				// BUG: https://ideas.digitalocean.com/managed-database/p/the-api-should-specify-what-resources-may-be-used-with-managed-databases
-				LoggerFactory.getLogger(DatabaseCreator.class).warn("Unexpected response: {}\nRequest: {}",
-					client.toString(serverResponse), client.toString(request));
-				JsonNode json = client.getResponseBody(serverResponse);
+				ContentResponse contentResponse = (ContentResponse) serverResponse;
+				JsonNode json = client.getResponseBody(contentResponse);
 				String message = json.get("message").textValue();
 				switch (message)
 				{

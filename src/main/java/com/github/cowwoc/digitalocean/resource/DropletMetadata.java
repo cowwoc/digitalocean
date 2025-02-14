@@ -3,6 +3,7 @@ package com.github.cowwoc.digitalocean.resource;
 import com.github.cowwoc.digitalocean.client.DigitalOceanClient;
 import org.eclipse.jetty.client.ContentResponse;
 import org.eclipse.jetty.client.Request;
+import org.eclipse.jetty.client.Response;
 
 import java.io.IOException;
 import java.net.URI;
@@ -95,7 +96,7 @@ public final class DropletMetadata
 	private static String getValue(DigitalOceanClient client, URI uri)
 		throws IOException, InterruptedException
 	{
-		ContentResponse serverResponse;
+		Response serverResponse;
 		try
 		{
 			// Reduce the timeout since the server is expected to respond quickly. Additionally, we want to timeout
@@ -111,7 +112,8 @@ public final class DropletMetadata
 		}
 		if (serverResponse.getStatus() != OK_200)
 			return null;
-		return serverResponse.getContentAsString();
+		ContentResponse contentResponse = (ContentResponse) serverResponse;
+		return contentResponse.getContentAsString();
 	}
 
 	private DropletMetadata()

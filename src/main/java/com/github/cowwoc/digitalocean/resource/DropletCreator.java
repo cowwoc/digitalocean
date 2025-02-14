@@ -5,11 +5,12 @@ import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.cowwoc.digitalocean.client.DigitalOceanClient;
-import com.github.cowwoc.digitalocean.exception.PermissionDeniedException;
+import com.github.cowwoc.digitalocean.exception.AccessDeniedException;
 import com.github.cowwoc.digitalocean.internal.util.Strings;
 import com.github.cowwoc.digitalocean.internal.util.ToStringBuilder;
 import org.eclipse.jetty.client.ContentResponse;
 import org.eclipse.jetty.client.Request;
+import org.eclipse.jetty.client.Response;
 
 import java.io.IOException;
 import java.time.DayOfWeek;
@@ -353,17 +354,17 @@ public final class DropletCreator
 	 * Creates a new droplet.
 	 *
 	 * @return the new droplet
-	 * @throws IllegalStateException     if the client is closed
-	 * @throws PermissionDeniedException if the request exceeded the client's droplet limit
-	 * @throws IOException               if an I/O error occurs. These errors are typically transient, and
-	 *                                   retrying the request may resolve the issue.
-	 * @throws TimeoutException          if the request times out before receiving a response. This might
-	 *                                   indicate network latency or server overload.
-	 * @throws InterruptedException      if the thread is interrupted while waiting for a response. This can
-	 *                                   happen due to shutdown signals.
+	 * @throws IllegalStateException if the client is closed
+	 * @throws AccessDeniedException if the request exceeded the client's droplet limit
+	 * @throws IOException           if an I/O error occurs. These errors are typically transient, and retrying
+	 *                               the request may resolve the issue.
+	 * @throws TimeoutException      if the request times out before receiving a response. This might indicate
+	 *                               network latency or server overload.
+	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
+	 *                               due to shutdown signals.
 	 */
 	public Droplet create()
-		throws PermissionDeniedException, IOException, TimeoutException, InterruptedException
+		throws AccessDeniedException, IOException, TimeoutException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/api-reference/#operation/droplets_create
 		JsonMapper jm = client.getJsonMapper();
@@ -404,8 +405,9 @@ public final class DropletCreator
 
 		Request request = client.createRequest(REST_SERVER.resolve("v2/droplets"), requestBody).
 			method(POST);
-		ContentResponse serverResponse = client.send(request);
-		String responseAsString = serverResponse.getContentAsString();
+		Response serverResponse = client.send(request);
+		ContentResponse contentResponse = (ContentResponse) serverResponse;
+		String responseAsString = contentResponse.getContentAsString();
 		switch (serverResponse.getStatus())
 		{
 			case ACCEPTED_202 ->
@@ -415,8 +417,8 @@ public final class DropletCreator
 			case UNPROCESSABLE_ENTITY_422 ->
 			{
 				// Example: creating this/these droplet(s) will exceed your droplet limit
-				JsonNode json = client.getResponseBody(serverResponse);
-				throw new PermissionDeniedException(json.get("message").textValue());
+				JsonNode json = client.getResponseBody(contentResponse);
+				throw new AccessDeniedException(json.get("message").textValue());
 			}
 			default -> throw new AssertionError("Unexpected response: " + client.toString(serverResponse) + "\n" +
 				"Request: " + client.toString(request));

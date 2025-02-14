@@ -13,6 +13,7 @@ import com.github.cowwoc.pouch.core.WrappedCheckedException;
 import org.eclipse.jetty.client.BytesRequestContent;
 import org.eclipse.jetty.client.ContentResponse;
 import org.eclipse.jetty.client.HttpClient;
+import org.eclipse.jetty.client.HttpResponseException;
 import org.eclipse.jetty.client.Request;
 import org.eclipse.jetty.client.Request.Content;
 import org.eclipse.jetty.client.Response;
@@ -312,13 +313,13 @@ public class MainDigitalOceanClient implements DigitalOceanClient
 				request.param(key, value);
 		}
 		request.method(GET);
-		ContentResponse serverResponse = send(request);
+		Response serverResponse = send(request);
 		if (serverResponse.getStatus() != OK_200)
 		{
 			throw new AssertionError("Unexpected response: " + toString(serverResponse) + "\n" +
 				"Request: " + toString(request));
 		}
-		return getResponseBody(serverResponse);
+		return getResponseBody((ContentResponse) serverResponse);
 	}
 
 	/**
@@ -376,13 +377,14 @@ public class MainDigitalOceanClient implements DigitalOceanClient
 		ensureOpen();
 		Request request = createRequest(uri).
 			method(GET);
-		ContentResponse serverResponse = send(request);
+		Response serverResponse = send(request);
 		if (serverResponse.getStatus() != OK_200)
 		{
 			throw new AssertionError("Unexpected response: " + toString(serverResponse) + "\n" +
 				"Request: " + toString(request));
 		}
-		JsonNode body = getResponseBody(serverResponse);
+		ContentResponse contentResponse = (ContentResponse) serverResponse;
+		JsonNode body = getResponseBody(contentResponse);
 		try
 		{
 			return mapper.map(body);
@@ -400,7 +402,7 @@ public class MainDigitalOceanClient implements DigitalOceanClient
 		ensureOpen();
 		Request request = createRequest(uri).
 			method(DELETE);
-		ContentResponse serverResponse = send(request);
+		Response serverResponse = send(request);
 		if (serverResponse.getStatus() != NO_CONTENT_204)
 		{
 			throw new AssertionError("Unexpected response: " + toString(serverResponse) + "\n" +
@@ -475,7 +477,7 @@ public class MainDigitalOceanClient implements DigitalOceanClient
 	}
 
 	@Override
-	public ContentResponse send(Request request) throws IOException, TimeoutException, InterruptedException
+	public Response send(Request request) throws IOException, TimeoutException, InterruptedException
 	{
 		ensureOpen();
 		if (RUN_MODE == RunMode.DEBUG)
@@ -489,6 +491,8 @@ public class MainDigitalOceanClient implements DigitalOceanClient
 			Throwable cause = e.getCause();
 			if (cause instanceof IOException ioe)
 				throw ioe;
+			if (cause instanceof HttpResponseException hre)
+				return hre.getResponse();
 			throw new AssertionError(toString(request), e);
 		}
 	}

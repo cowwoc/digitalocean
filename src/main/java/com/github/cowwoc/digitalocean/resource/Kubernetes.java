@@ -13,6 +13,7 @@ import com.github.cowwoc.digitalocean.internal.util.TimeLimit;
 import com.github.cowwoc.digitalocean.internal.util.ToStringBuilder;
 import org.eclipse.jetty.client.ContentResponse;
 import org.eclipse.jetty.client.Request;
+import org.eclipse.jetty.client.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -569,7 +570,7 @@ public final class Kubernetes
 		URI uri = REST_SERVER.resolve("v2/kubernetes/clusters/" + id);
 		Request request = client.createRequest(uri, requestBody).
 			method(PUT);
-		ContentResponse serverResponse = client.send(request);
+		Response serverResponse = client.send(request);
 		switch (serverResponse.getStatus())
 		{
 			case ACCEPTED_202 ->
@@ -607,12 +608,13 @@ public final class Kubernetes
 		Request request = client.createRequest(uri).
 			param("expiry_seconds", String.valueOf(duration.toSeconds())).
 			method(GET);
-		ContentResponse serverResponse = client.send(request);
+		Response serverResponse = client.send(request);
 		switch (serverResponse.getStatus())
 		{
 			case OK_200 ->
 			{
-				return serverResponse.getContentAsString();
+				ContentResponse contentResponse = (ContentResponse) serverResponse;
+				return contentResponse.getContentAsString();
 			}
 			case NOT_FOUND_404 -> throw new KubernetesNotFoundException(getId());
 			default -> throw new AssertionError("Unexpected response: " + client.toString(serverResponse) + "\n" +
@@ -649,7 +651,7 @@ public final class Kubernetes
 		{
 			Request request = client.createRequest(uri).
 				method(GET);
-			ContentResponse serverResponse = client.send(request);
+			Response serverResponse = client.send(request);
 			switch (serverResponse.getStatus())
 			{
 				case OK_200 ->
@@ -660,7 +662,8 @@ public final class Kubernetes
 				default -> throw new AssertionError("Unexpected response: " + client.toString(serverResponse) + "\n" +
 					"Request: " + client.toString(request));
 			}
-			JsonNode body = client.getResponseBody(serverResponse);
+			ContentResponse contentResponse = (ContentResponse) serverResponse;
+			JsonNode body = client.getResponseBody(contentResponse);
 			Kubernetes newCluster = getByJson(client, body.get("kubernetes_cluster"));
 			if (newCluster.getStatus().state.equals(state))
 			{
@@ -699,7 +702,7 @@ public final class Kubernetes
 			"/destroy_with_associated_resources/dangerous");
 		Request request = client.createRequest(uri).
 			method(DELETE);
-		ContentResponse serverResponse = client.send(request);
+		Response serverResponse = client.send(request);
 		switch (serverResponse.getStatus())
 		{
 			case NO_CONTENT_204, NOT_FOUND_404 ->

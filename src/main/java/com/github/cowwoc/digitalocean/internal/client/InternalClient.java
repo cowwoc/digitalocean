@@ -211,7 +211,7 @@ public interface InternalClient
 	 * @throws InterruptedException if the thread is interrupted while waiting for a response. This can happen
 	 *                              due to shutdown signals.
 	 */
-	ContentResponse send(Request request) throws IOException, TimeoutException, InterruptedException;
+	Response send(Request request) throws IOException, TimeoutException, InterruptedException;
 
 	/**
 	 * Returns the String representation of the response

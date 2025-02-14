@@ -2,6 +2,12 @@ Minor updates involving cosmetic changes have been omitted from this list.
 
 See https://github.com/cowwoc/digitalocean/commits/main for a full list.
 
+## Version 0.11 - 025/02/14
+
+* Bugfix: `DockerRegistry.getCredentials()` was always requesting a 5-minute expiration instead of the
+  duration specified by the user.
+* Renamed `PermissionDeniedException` to `AccessDeniedException`.
+
 ## Version 0.9 - 2025/01/16
 
 * Added `DigitalOceanClient.anonymous()`.

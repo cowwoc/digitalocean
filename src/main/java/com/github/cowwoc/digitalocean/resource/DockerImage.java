@@ -5,6 +5,7 @@ import com.github.cowwoc.digitalocean.client.DigitalOceanClient;
 import org.eclipse.jetty.client.ContentResponse;
 import org.eclipse.jetty.client.HttpResponseException;
 import org.eclipse.jetty.client.Request;
+import org.eclipse.jetty.client.Response;
 
 import java.io.IOException;
 import java.net.URI;
@@ -136,7 +137,7 @@ public final class DockerImage
 			repository.getName() + "/digests/" + digest);
 		Request request = client.createRequest(uri).
 			method(DELETE);
-		ContentResponse serverResponse = client.send(request);
+		Response serverResponse = client.send(request);
 		switch (serverResponse.getStatus())
 		{
 			case NO_CONTENT_204, NOT_FOUND_404 ->
@@ -145,14 +146,16 @@ public final class DockerImage
 			}
 			case UNAUTHORIZED_401 ->
 			{
-				JsonNode json = client.getResponseBody(serverResponse);
+				ContentResponse contentResponse = (ContentResponse) serverResponse;
+				JsonNode json = client.getResponseBody(contentResponse);
 				throw new HttpResponseException(json.get("message").textValue(), serverResponse);
 			}
 			case PRECONDITION_FAILED_412 ->
 			{
 				// Example: "manifest is referenced by one or more other manifests" or
 				// "delete operations are not available while garbage collection is running"
-				JsonNode json = client.getResponseBody(serverResponse);
+				ContentResponse contentResponse = (ContentResponse) serverResponse;
+				JsonNode json = client.getResponseBody(contentResponse);
 				throw new IllegalArgumentException(json.get("message").textValue());
 			}
 			default -> throw new AssertionError("Unexpected response: " + client.toString(serverResponse) + "\n" +
