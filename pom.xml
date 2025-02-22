@@ -260,7 +260,7 @@
 									<ignoreVersions>
 										<ignoreVersion>
 											<type>regex</type>
-											<version>(.+-SNAPSHOT|.+(-|\.)M\d|.+(-|\.)(alpha|beta).+)|.+-rc(-|\.).*</version>
+											<version>(?i)(.+-snapshot|.+(-|\.)M\d|.+(-|\.)(alpha|beta).+)|.+-rc(-|\.|\d).*</version>
 										</ignoreVersion>
 									</ignoreVersions>
 								</rule>
