@@ -1,0 +1,20 @@
+name: Build
+on:
+  push:
+    branches: [ main ]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build
+    uses: ./.github/workflows/reusable-build.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      actions: read
+      checks: write
+    with:
+      COMMIT_ID: ${{ github.ref }}
+      FOR_RELEASE: false
