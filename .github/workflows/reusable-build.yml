@@ -1,0 +1,76 @@
+name: Build
+on:
+  workflow_call:
+    inputs:
+      COMMIT_ID:
+        required: true
+        type: string
+      FOR_RELEASE:
+        required: true
+        type: boolean
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.COMMIT_ID }}
+
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 24
+
+      - name: Cache Dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/*
+          key: maven-${{ hashFiles('**/pom.xml') }}
+
+      - name: Create test configuration
+        run: |
+          cat <<-EOF > test/test.properties
+          ACCESS_TOKEN=${{ secrets.ACCESS_TOKEN }}
+          EOF
+
+      # Maven command-line options:
+      # --batch-mode: recommended in CI to inform maven to not run in interactive mode (less logs)
+      # -V: strongly recommended in CI, will display the JDK and Maven versions in use.
+      # -e: Display stack-traces on failure
+      # -Dsurefire.useFile=false: useful in CI. Displays test errors in the logs directly (instead of
+      #                           having to crawl the workspace files to see the cause).
+      # -P release: activate the "release" profile
+      - name: Build
+        shell: bash
+        run: |
+          PROFILE=""          
+          if [[ "${{ inputs.FOR_RELEASE }}" == "true" ]]; then
+            PROFILE="-P release"
+            PHASE="install"
+          else
+            PHASE="verify"
+          fi
+          ./mvnw ${PHASE} --batch-mode -V -e "-Dsurefire.useFile=false" ${PROFILE}
+
+      - name: Publish test results
+        uses: dorny/test-reporter@v1
+        if: success() || failure()
+        with:
+          name: Unit tests
+          reporter: java-junit
+          path: '**/failsafe-reports/junitreports/*.xml'
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ inputs.FOR_RELEASE }}
+        with:
+          name: bundle
+          path: |
+            ~/.m2/repository/io/github/cowwoc/digitalocean/
+            !~/.m2/repository/io/github/cowwoc/digitalocean/**/maven-metadata-local.xml
+            !~/.m2/repository/io/github/cowwoc/digitalocean/**/_remote.repositories
+            !~/.m2/repository/io/github/cowwoc/digitalocean/**/*.lastUpdated
+          if-no-files-found: error
+          retention-days: 1

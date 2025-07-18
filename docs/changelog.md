@@ -2,7 +2,17 @@ Minor updates involving cosmetic changes have been omitted from this list.
 
 See https://github.com/cowwoc/digitalocean/commits/main for a full list.
 
-## Version 0.11 - 025/02/14
+## Version 0.12 - 2025/07/18
+
+* Renamed groupId from `com.github.cowwoc.digitalocean` to `io.github.cowwoc.digitalocean`.
+* Split codebase into separate modules (e.g., compute, database, network).
+* Renamed `Zone` to `Region` to match DigitalOcean's terminology.
+* Separated interface and implementation of classes that interact with remote services in order to facilitate
+  the use of test mocks.
+* The code now throws `IOException` instead of `TimeoutException` in the case of I/O-related timeouts;
+  signaling that the failure is likely to be intermittent.
+
+## Version 0.11 - 2025/02/14
 
 * Bugfix: `DockerRegistry.getCredentials()` was always requesting a 5-minute expiration instead of the
   duration specified by the user.

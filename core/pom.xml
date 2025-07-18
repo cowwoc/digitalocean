@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>io.github.cowwoc.digitalocean</groupId>
+		<artifactId>digitalocean</artifactId>
+		<version>0.12-SNAPSHOT</version>
+	</parent>
+	<artifactId>digitalocean-core</artifactId>
+	<name>digitalocean-core</name>
+
+	<properties>
+		<project.root.basedir>${project.parent.basedir}</project.root.basedir>
+	</properties>
+
+	<dependencies>
+		<dependency>
+			<groupId>io.github.cowwoc.requirements</groupId>
+			<artifactId>requirements-java</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.github.cowwoc.requirements</groupId>
+			<artifactId>requirements-jackson</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.eclipse.jetty</groupId>
+			<artifactId>jetty-client</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-databind</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.fasterxml.jackson.datatype</groupId>
+			<artifactId>jackson-datatype-jsr310</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.threeten</groupId>
+			<artifactId>threeten-extra</artifactId>
+		</dependency>
+	</dependencies>
+</project>

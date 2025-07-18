@@ -14,3 +14,6 @@
 # Java
 target/
 coverage/
+
+# User-specific configuration
+/test/test.properties

@@ -1,0 +1,11 @@
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd" >
+<suite name="TestSuite" parallel="methods" thread-count="15">
+	<listeners>
+		<listener class-name="io.github.cowwoc.digitalocean.test.util.WarnOnSlowTests"/>
+	</listeners>
+	<test name="DigitalOcean Tests">
+		<packages>
+			<package name="io.github.cowwoc.digitalocean.test"/>
+		</packages>
+	</test>
+</suite>
