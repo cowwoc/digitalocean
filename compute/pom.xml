@@ -4,7 +4,7 @@
 	<parent>
 		<groupId>io.github.cowwoc.digitalocean</groupId>
 		<artifactId>digitalocean</artifactId>
-		<version>0.12</version>
+		<version>0.13-SNAPSHOT</version>
 	</parent>
 	<artifactId>digitalocean-compute</artifactId>
 	<name>digitalocean-compute</name>

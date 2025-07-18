@@ -8,7 +8,7 @@
 
 	<groupId>io.github.cowwoc.digitalocean</groupId>
 	<artifactId>digitalocean</artifactId>
-	<version>0.12</version>
+	<version>0.13-SNAPSHOT</version>
 
 	<licenses>
 		<license>
@@ -22,7 +22,7 @@
 		<url>https://github.com/cowwoc/digitalocean/</url>
 		<connection>scm:git:https://github.com/cowwoc/digitalocean/</connection>
 		<developerConnection>scm:git:https://github.com/cowwoc/digitalocean/</developerConnection>
-		<tag>release-0.12</tag>
+		<tag>HEAD</tag>
 	</scm>
 
 	<developers>
