@@ -3,7 +3,7 @@
 
 # <img src="docs/logo.svg" width=64 height=64 alt="logo"> DigitalOcean Java Client
 
-[![API](https://img.shields.io/badge/api_docs-5B45D5.svg)](https://cowwoc.github.io/digitalocean/0.12/)
+[![API](https://img.shields.io/badge/api_docs-5B45D5.svg)](https://cowwoc.github.io/digitalocean/0.13/)
 [![Changelog](https://img.shields.io/badge/changelog-A345D5.svg)](docs/changelog.md)
 
 A Java client for the [DigitalOcean](https://www.digitalocean.com/) cloud platform.
@@ -15,7 +15,7 @@ To get started, add this Maven dependency:
 <dependency>
   <groupId>io.github.cowwoc.digitalocean</groupId>
   <artifactId>digitalocean</artifactId>
-  <version>0.12</version>
+  <version>0.13</version>
 </dependency>
 ```
 
@@ -37,35 +37,35 @@ class Example
 {
   public static void main(String[] args) throws IOException, InterruptedException
   {
-    try (ComputeClient client = ComputeClient.build())
-    {
-      Configuration configuration = Configuration.fromPath(Path.of("example.properties"));
-      String accessToken = configuration.getString("ACCESS_TOKEN");
-      client.login(accessToken);
+	  try (ComputeClient client = ComputeClient.build())
+	  {
+		  Configuration configuration = Configuration.fromPath(Path.of("example.properties"));
+		  String accessToken = configuration.getString("ACCESS_TOKEN");
+		  client.login(accessToken);
 
-      DropletImage image = client.getDropletImage("debian-12-x64");
-      Region region = client.getRegions().getFirst();
+		  DropletImage image = client.getDropletImage("debian-12-x64");
+		  Region region = client.getRegions(true).getFirst();
 
-      // Get the least expensive droplet type with at least 2 GiB of memory
-      DropletType dropletType = client.getDropletTypes().stream().filter(type ->
-          type.getRegionIds().contains(region.getId()) && type.getRamInMiB() >= 2 * 1024).
-        min(Comparator.comparing(DropletType::getCostPerHour)).orElseThrow();
+		  // Get the least expensive droplet type with at least 2 GiB of memory
+		  ComputeDropletType dropletType = client.getDropletTypes().stream().filter(type ->
+				  type.getRegionIds().contains(region.getId()) && type.getRamInMiB() >= 2 * 1024).
+			  min(Comparator.comparing(ComputeDropletType::getCostPerHour)).orElseThrow();
 
-      Droplet droplet = client.createDroplet("Node123", dropletType.getId(), image.getId()).apply();
-      while (droplet.getAddresses().isEmpty())
-      {
-        Thread.sleep(1000);
-        droplet = droplet.reload();
-      }
-      System.out.println("The droplet's address is: " + droplet.getAddresses().iterator().next());
-    }
+		  Droplet droplet = client.createDroplet("Node123", dropletType.getId(), image.getId()).apply();
+		  while (droplet.getAddresses().isEmpty())
+		  {
+			  Thread.sleep(1000);
+			  droplet = droplet.reload();
+		  }
+		  System.out.println("The droplet's address is: " + droplet.getAddresses().iterator().next());
+	  }
   }
 }
 ```
 
 ## Getting Started
 
-See the [API documentation](https://cowwoc.github.io/digitalocean/0.12/) for more details.
+See the [API documentation](https://cowwoc.github.io/digitalocean/0.13/) for more details.
 
 ## Licenses
 

@@ -1,6 +1,6 @@
 package io.github.cowwoc.digitalocean.project.resource;
 
-import io.github.cowwoc.digitalocean.core.id.StringId;
+import io.github.cowwoc.digitalocean.core.id.ProjectId;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -11,24 +11,11 @@ import java.time.Instant;
 public interface Project
 {
 	/**
-	 * Creates a new ID.
-	 *
-	 * @param value the server-side identifier
-	 * @return the type-safe identifier for the resource
-	 * @throws NullPointerException     if {@code value} is null
-	 * @throws IllegalArgumentException if {@code value} contains whitespace or is empty
-	 */
-	static Id id(String value)
-	{
-		return new Id(value);
-	}
-
-	/**
 	 * Returns the project's ID.
 	 *
 	 * @return the ID
 	 */
-	Id getId();
+	ProjectId getId();
 
 	/**
 	 * Returns the name of the project.
@@ -94,7 +81,7 @@ public interface Project
 	Instant getUpdatedAt();
 
 	/**
-	 * Destroys the project.
+	 * Destroys the project. If the project does not exist, this method does nothing.
 	 *
 	 * @throws IllegalStateException if the client is closed
 	 * @throws IOException           if an I/O error occurs. These errors are typically transient, and retrying
@@ -103,25 +90,6 @@ public interface Project
 	 *                               due to shutdown signals.
 	 */
 	void destroy() throws IOException, InterruptedException;
-
-	/**
-	 * A type-safe identifier for this type of resource.
-	 * <p>
-	 * This adds type-safety to API methods by ensuring that IDs specific to one class cannot be used in place
-	 * of IDs belonging to another class.
-	 */
-	final class Id extends StringId
-	{
-		/**
-		 * @param value a server-side identifier
-		 * @throws NullPointerException     if {@code value} is null
-		 * @throws IllegalArgumentException if {@code value} contains whitespace or is empty
-		 */
-		private Id(String value)
-		{
-			super(value);
-		}
-	}
 
 	/**
 	 * A project's deployment environment.

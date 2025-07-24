@@ -2,7 +2,7 @@ package io.github.cowwoc.digitalocean.registry.internal.resource;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.cowwoc.digitalocean.core.exception.AccessDeniedException;
-import io.github.cowwoc.digitalocean.core.id.IntegerId;
+import io.github.cowwoc.digitalocean.core.id.ContainerImageId;
 import io.github.cowwoc.digitalocean.core.internal.util.ToStringBuilder;
 import io.github.cowwoc.digitalocean.registry.internal.client.DefaultRegistryClient;
 import io.github.cowwoc.digitalocean.registry.internal.parser.RegistryParser;
@@ -115,7 +115,7 @@ public final class DefaultRepository implements Repository
 	}
 
 	@Override
-	public void destroyImage(ContainerImage.Id imageId) throws IOException, InterruptedException
+	public void destroyImage(ContainerImageId imageId) throws IOException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/digitalocean/#tag/Container-Registry/operation/registry_delete_repositoryManifest
 		Registry registry = getRegistry();
@@ -206,22 +206,5 @@ public final class DefaultRepository implements Repository
 			add("registry", registry).
 			add("name", name).
 			toString();
-	}
-
-	/**
-	 * A type-safe identifier for this type of resource.
-	 * <p>
-	 * This adds type-safety to API methods by ensuring that IDs specific to one class cannot be used in place
-	 * of IDs belonging to another class.
-	 */
-	public static final class Id extends IntegerId
-	{
-		/**
-		 * @param value a server-side identifier
-		 */
-		private Id(int value)
-		{
-			super(value);
-		}
 	}
 }

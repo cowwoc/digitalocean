@@ -2,6 +2,7 @@ package io.github.cowwoc.digitalocean.compute.internal.resource;
 
 import io.github.cowwoc.digitalocean.compute.internal.client.DefaultComputeClient;
 import io.github.cowwoc.digitalocean.compute.resource.SshPublicKey;
+import io.github.cowwoc.digitalocean.core.id.SshPublicKeyId;
 import io.github.cowwoc.digitalocean.core.internal.util.ToStringBuilder;
 
 import java.io.IOException;
@@ -16,7 +17,7 @@ import static io.github.cowwoc.requirements12.java.DefaultJavaValidators.require
 public final class DefaultSshPublicKey implements SshPublicKey
 {
 	private final DefaultComputeClient client;
-	private final Id id;
+	private final SshPublicKeyId id;
 	private final String name;
 	private final String fingerprint;
 
@@ -31,7 +32,7 @@ public final class DefaultSshPublicKey implements SshPublicKey
 	 * @throws IllegalArgumentException if any of the arguments contain leading or trailing whitespace or are
 	 *                                  empty
 	 */
-	public DefaultSshPublicKey(DefaultComputeClient client, Id id, String name, String fingerprint)
+	public DefaultSshPublicKey(DefaultComputeClient client, SshPublicKeyId id, String name, String fingerprint)
 	{
 		assert client != null;
 		requireThat(name, "name").isStripped().isNotEmpty();
@@ -43,7 +44,7 @@ public final class DefaultSshPublicKey implements SshPublicKey
 	}
 
 	@Override
-	public Id getId()
+	public SshPublicKeyId getId()
 	{
 		return id;
 	}

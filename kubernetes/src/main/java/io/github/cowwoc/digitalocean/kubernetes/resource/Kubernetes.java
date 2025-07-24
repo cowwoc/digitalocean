@@ -1,13 +1,13 @@
 package io.github.cowwoc.digitalocean.kubernetes.resource;
 
-import io.github.cowwoc.digitalocean.compute.resource.DropletType;
 import io.github.cowwoc.digitalocean.core.exception.ResourceNotFoundException;
-import io.github.cowwoc.digitalocean.core.id.StringId;
+import io.github.cowwoc.digitalocean.core.id.ComputeDropletTypeId;
+import io.github.cowwoc.digitalocean.core.id.KubernetesId;
+import io.github.cowwoc.digitalocean.core.id.RegionId;
+import io.github.cowwoc.digitalocean.core.id.VpcId;
 import io.github.cowwoc.digitalocean.core.internal.util.ToStringBuilder;
 import io.github.cowwoc.digitalocean.kubernetes.internal.client.DefaultKubernetesCreator.DefaultNodePoolBuilder;
 import io.github.cowwoc.digitalocean.kubernetes.resource.KubernetesCreator.NodePoolBuilder;
-import io.github.cowwoc.digitalocean.network.resource.Region;
-import io.github.cowwoc.digitalocean.network.resource.Vpc;
 
 import java.io.IOException;
 import java.time.DayOfWeek;
@@ -25,25 +25,11 @@ import static io.github.cowwoc.requirements12.java.DefaultJavaValidators.require
 public interface Kubernetes
 {
 	/**
-	 * Creates a new ID.
-	 *
-	 * @param value the server-side identifier (slug)
-	 * @return the type-safe identifier for the resource
-	 * @throws IllegalArgumentException if {@code value} contains whitespace or is empty
-	 */
-	static Id id(String value)
-	{
-		if (value == null)
-			return null;
-		return new Id(value);
-	}
-
-	/**
 	 * Returns the cluster's ID.
 	 *
 	 * @return the cluster's ID
 	 */
-	Id getId();
+	KubernetesId getId();
 
 	/**
 	 * Returns the cluster's name.
@@ -57,7 +43,7 @@ public interface Kubernetes
 	 *
 	 * @return the region
 	 */
-	Region.Id getRegion();
+	RegionId getRegionId();
 
 	/**
 	 * Returns the version of the Kubernetes software that is deployed.
@@ -85,7 +71,7 @@ public interface Kubernetes
 	 *
 	 * @return the VPC
 	 */
-	Vpc.Id getVpc();
+	VpcId getVpcId();
 
 	/**
 	 * Returns the public IPv4 address of the Kubernetes control plane. This value will not be set if high
@@ -275,7 +261,7 @@ public interface Kubernetes
 	 * @param maxNodes             the maximum number of nodes in the pool
 	 * @param nodes                the nodes in the pool
 	 */
-	record NodePool(String id, String name, DropletType.Id dropletType, int initialNumberOfNodes,
+	record NodePool(String id, String name, ComputeDropletTypeId dropletType, int initialNumberOfNodes,
 	                Set<String> tags, Set<String> labels, Set<String> taints, boolean autoScale, int minNodes,
 	                int maxNodes, Set<Node> nodes)
 	{
@@ -306,7 +292,7 @@ public interface Kubernetes
 		 *                                    <li>{@code minNodes} is greater than {@code maxNodes}.</li>
 		 *                                  </ul>
 		 */
-		public NodePool(String id, String name, DropletType.Id dropletType, int initialNumberOfNodes,
+		public NodePool(String id, String name, ComputeDropletTypeId dropletType, int initialNumberOfNodes,
 			Set<String> tags, Set<String> labels, Set<String> taints, boolean autoScale, int minNodes, int maxNodes,
 			Set<Node> nodes)
 		{
@@ -346,8 +332,7 @@ public interface Kubernetes
 		 */
 		public NodePoolBuilder forCreator()
 		{
-			NodePoolBuilder creator = new DefaultNodePoolBuilder(name,
-				dropletType, initialNumberOfNodes).
+			NodePoolBuilder creator = new DefaultNodePoolBuilder(name, dropletType, initialNumberOfNodes).
 				tags(tags).
 				labels(labels).
 				taints(taints);
@@ -538,25 +523,6 @@ public interface Kubernetes
 				add("startTime", startTime).
 				add("day", day).
 				toString();
-		}
-	}
-
-	/**
-	 * A type-safe identifier for this type of resource.
-	 * <p>
-	 * This adds type-safety to API methods by ensuring that IDs specific to one class cannot be used in place
-	 * of IDs belonging to another class.
-	 */
-	final class Id extends StringId
-	{
-		/**
-		 * @param value a server-side identifier
-		 * @throws NullPointerException     if {@code value} is null
-		 * @throws IllegalArgumentException if {@code value} contains whitespace or is empty
-		 */
-		private Id(String value)
-		{
-			super(value);
 		}
 	}
 

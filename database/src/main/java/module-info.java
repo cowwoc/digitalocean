@@ -3,9 +3,8 @@
  */
 module io.github.cowwoc.digitalocean.database
 {
-	requires io.github.cowwoc.digitalocean.core;
-	requires io.github.cowwoc.digitalocean.network;
-	requires transitive io.github.cowwoc.digitalocean.compute;
+	requires transitive io.github.cowwoc.digitalocean.core;
+	requires static io.github.cowwoc.digitalocean.network;
 	requires io.github.cowwoc.requirements12.java;
 	requires org.eclipse.jetty.client;
 	requires com.fasterxml.jackson.databind;

@@ -1,17 +1,21 @@
 package io.github.cowwoc.digitalocean.database.internal.client;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import io.github.cowwoc.digitalocean.compute.resource.DropletType;
 import io.github.cowwoc.digitalocean.core.exception.ResourceNotFoundException;
+import io.github.cowwoc.digitalocean.core.id.DatabaseDropletTypeId;
+import io.github.cowwoc.digitalocean.core.id.DatabaseId;
+import io.github.cowwoc.digitalocean.core.id.DatabaseTypeId;
+import io.github.cowwoc.digitalocean.core.id.ProjectId;
+import io.github.cowwoc.digitalocean.core.id.RegionId;
+import io.github.cowwoc.digitalocean.core.id.VpcId;
+import io.github.cowwoc.digitalocean.core.internal.util.ParameterValidator;
 import io.github.cowwoc.digitalocean.core.internal.util.RetryDelay;
 import io.github.cowwoc.digitalocean.core.internal.util.TimeLimit;
 import io.github.cowwoc.digitalocean.core.internal.util.ToStringBuilder;
 import io.github.cowwoc.digitalocean.database.resource.Database;
 import io.github.cowwoc.digitalocean.database.resource.DatabaseCreator;
-import io.github.cowwoc.digitalocean.database.resource.DatabaseType;
 import io.github.cowwoc.digitalocean.database.resource.Endpoint;
-import io.github.cowwoc.digitalocean.network.resource.Region;
-import io.github.cowwoc.digitalocean.network.resource.Vpc;
+import io.github.cowwoc.digitalocean.network.client.NetworkClient;
 import io.github.cowwoc.requirements12.annotation.CheckReturnValue;
 import org.eclipse.jetty.client.ContentResponse;
 import org.eclipse.jetty.client.Request;
@@ -38,16 +42,16 @@ import static org.eclipse.jetty.http.HttpStatus.OK_200;
 public final class DefaultDatabase implements Database
 {
 	private final DefaultDatabaseClient client;
-	private final Id id;
+	private final DatabaseId id;
 	private final String name;
-	private final DatabaseType.Id databaseTypeId;
+	private final DatabaseTypeId databaseTypeId;
 	private final String version;
 	private final String semanticVersion;
-	private final int numberOfStandbyNodes;
-	private final DropletType.Id dropletType;
-	private final Region.Id region;
+	private final int numberOfNodes;
+	private final DatabaseDropletTypeId dropletType;
+	private final RegionId region;
 	private final Status status;
-	private final Vpc.Id vpc;
+	private final VpcId vpc;
 	private final Set<String> tags;
 	private final Set<String> databaseNames;
 	private final OpenSearchDashboard openSearchDashboard;
@@ -57,7 +61,7 @@ public final class DefaultDatabase implements Database
 	private final Connection standbyPrivateConnection;
 	private final Set<User> users;
 	private final MaintenanceSchedule maintenanceSchedule;
-	private final String projectId;
+	private final ProjectId projectId;
 	private final Set<FirewallRule> firewallRules;
 	private final Instant versionEndOfLife;
 	private final Instant versionEndOfAvailability;
@@ -75,13 +79,14 @@ public final class DefaultDatabase implements Database
 	 * @param databaseTypeId           the database type
 	 * @param version                  the major version number of the database software
 	 * @param semanticVersion          the semantic version number of the database software
-	 * @param numberOfStandbyNodes     the number of standby nodes in the cluster. The cluster includes one
+	 * @param numberOfNodes            the number of standby nodes in the cluster. The cluster includes one
 	 *                                 primary node, and may include one or two standby nodes.
 	 * @param dropletType              the machine type of the nodes
 	 * @param region                   the region that the cluster is deployed to
 	 * @param status                   the state of the cluster
 	 * @param vpc                      the VPC that the cluster is deployed in, or {@code null} if it is
-	 *                                 deployed into the default VPC of the region
+	 *                                 deployed into the {@link NetworkClient#getDefaultVpcId(RegionId) default}
+	 *                                 VPC of the region
 	 * @param tags                     the tags that are associated with the cluster
 	 * @param databaseNames            the names of databases in the cluster
 	 * @param openSearchDashboard      (optional) connection details for accessing the OpenSearch dashboard, or
@@ -110,28 +115,32 @@ public final class DefaultDatabase implements Database
 	 * @throws NullPointerException     if any of the mandatory arguments are null
 	 * @throws IllegalArgumentException if:
 	 *                                  <ul>
-	 *                                    <li>{@code name} contains leading or trailing whitespace or is
-	 *                                    empty.</li>
-	 *                                    <li>{@code numberOfStandbyNodes} is negative, or greater than 2.</li>
+	 *                                    <li>{@code name} contains characters other than lowercase letters
+	 *                                    ({@code a-z}), digits ({@code 0-9}), and dashes ({@code -}).</li>
+	 *                                    <li>{@code name} begins or ends with a character other than a letter
+	 *                                    or digit.</li>
+	 *                                    <li>{@code name} is shorter than 3 characters or longer than 63
+	 *                                    characters.</li>
+	 *                                    <li>{@code numberOfNodes} is less than 1 or greater than 3.</li>
 	 *                                    <li>{@code additionalStorageInMiB} is negative.</li>
 	 *                                  </ul>
 	 */
-	public DefaultDatabase(DefaultDatabaseClient client, Id id, String name, DatabaseType.Id databaseTypeId,
-		String version, String semanticVersion, int numberOfStandbyNodes, DropletType.Id dropletType,
-		Region.Id region, Status status, Vpc.Id vpc, Set<String> tags, Set<String> databaseNames,
-		OpenSearchDashboard openSearchDashboard, Connection publicConnection, Connection privateConnection,
-		Connection standbyPublicConnection, Connection standbyPrivateConnection, Set<User> users,
-		MaintenanceSchedule maintenanceSchedule, String projectId, Set<FirewallRule> firewallRules,
-		Instant versionEndOfLife, Instant versionEndOfAvailability, int additionalStorageInMiB,
-		Set<Endpoint> metricsEndpoints, Instant createdAt)
+	public DefaultDatabase(DefaultDatabaseClient client, DatabaseId id, String name,
+		DatabaseTypeId databaseTypeId, String version, String semanticVersion, int numberOfNodes,
+		DatabaseDropletTypeId dropletType, RegionId region, Status status, VpcId vpc, Set<String> tags,
+		Set<String> databaseNames, OpenSearchDashboard openSearchDashboard, Connection publicConnection,
+		Connection privateConnection, Connection standbyPublicConnection, Connection standbyPrivateConnection,
+		Set<User> users, MaintenanceSchedule maintenanceSchedule, ProjectId projectId,
+		Set<FirewallRule> firewallRules, Instant versionEndOfLife, Instant versionEndOfAvailability,
+		int additionalStorageInMiB, Set<Endpoint> metricsEndpoints, Instant createdAt)
 	{
 		requireThat(client, "client").isNotNull();
 		requireThat(id, "id").isNotNull();
-		requireThat(name, "name").isStripped().isNotEmpty();
+		ParameterValidator.validateName(name, "name");
 		requireThat(databaseTypeId, "databaseTypeId").isNotNull();
 		requireThat(version, "version").isStripped().isNotEmpty();
 		requireThat(semanticVersion, "semanticVersion").isStripped().isNotEmpty();
-		requireThat(numberOfStandbyNodes, "numberOfStandbyNodes").isBetween(0, true, 2, true);
+		requireThat(numberOfNodes, "numberOfNodes").isBetween(1, true, 3, true);
 		requireThat(dropletType, "dropletType").isNotNull();
 		requireThat(region, "region").isNotNull();
 		requireThat(status, "status").isNotNull();
@@ -147,7 +156,7 @@ public final class DefaultDatabase implements Database
 		}
 		requireThat(users, "users").isNotNull();
 		requireThat(maintenanceSchedule, "maintenanceSchedule").isNotNull();
-		requireThat(projectId, "projectId").isStripped().isNotEmpty();
+		requireThat(projectId, "projectId").isNotNull();
 		requireThat(firewallRules, "firewallRules").isNotNull();
 		requireThat(additionalStorageInMiB, "additionalStorageInMiB").isNotNegative();
 		requireThat(metricsEndpoints, "metricsEndpoints").isNotNull();
@@ -159,7 +168,7 @@ public final class DefaultDatabase implements Database
 		this.databaseTypeId = databaseTypeId;
 		this.version = version;
 		this.semanticVersion = semanticVersion;
-		this.numberOfStandbyNodes = numberOfStandbyNodes;
+		this.numberOfNodes = numberOfNodes;
 		this.dropletType = dropletType;
 		this.region = region;
 		this.status = status;
@@ -183,7 +192,7 @@ public final class DefaultDatabase implements Database
 	}
 
 	@Override
-	public Id getId()
+	public DatabaseId getId()
 	{
 		return id;
 	}
@@ -195,7 +204,7 @@ public final class DefaultDatabase implements Database
 	}
 
 	@Override
-	public DatabaseType.Id getDatabaseTypeId()
+	public DatabaseTypeId getDatabaseTypeId()
 	{
 		return databaseTypeId;
 	}
@@ -213,19 +222,19 @@ public final class DefaultDatabase implements Database
 	}
 
 	@Override
-	public int getNumberOfStandbyNodes()
+	public int getNumberOfNodes()
 	{
-		return numberOfStandbyNodes;
+		return numberOfNodes;
 	}
 
 	@Override
-	public DropletType.Id getDropletType()
+	public DatabaseDropletTypeId getDropletTypeId()
 	{
 		return dropletType;
 	}
 
 	@Override
-	public Region.Id getRegion()
+	public RegionId getRegionId()
 	{
 		return region;
 	}
@@ -237,7 +246,7 @@ public final class DefaultDatabase implements Database
 	}
 
 	@Override
-	public Vpc.Id getVpc()
+	public VpcId getVpcId()
 	{
 		return vpc;
 	}
@@ -325,7 +334,7 @@ public final class DefaultDatabase implements Database
 	}
 
 	@Override
-	public String getProjectId()
+	public ProjectId getProjectId()
 	{
 		return projectId;
 	}
@@ -370,7 +379,7 @@ public final class DefaultDatabase implements Database
 	@CheckReturnValue
 	public Database reload() throws IOException, InterruptedException
 	{
-		return client.getDatabaseCluster(id);
+		return client.getCluster(id);
 	}
 
 	@Override
@@ -467,8 +476,7 @@ public final class DefaultDatabase implements Database
 	@Override
 	public void destroy() throws IOException, InterruptedException
 	{
-		// https://docs.digitalocean.com/reference/api/digitalocean/#tag/Databases/operation/databases_destroy_cluster
-		client.destroyResource(REST_SERVER.resolve("v2/databases/" + id));
+		client.destroyCluster(id);
 	}
 
 	@Override
@@ -480,7 +488,7 @@ public final class DefaultDatabase implements Database
 			add("databaseType", databaseTypeId).
 			add("version", version).
 			add("semanticVersion", semanticVersion).
-			add("numberOfStandbyNodes", numberOfStandbyNodes).
+			add("numberOfNodes", numberOfNodes).
 			add("dropletType", dropletType).
 			add("region", region).
 			add("state", status).

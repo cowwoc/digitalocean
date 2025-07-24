@@ -1,15 +1,18 @@
 package io.github.cowwoc.digitalocean.compute.client;
 
 import io.github.cowwoc.digitalocean.compute.internal.client.DefaultComputeClient;
-import io.github.cowwoc.digitalocean.compute.resource.ComputeRegion;
+import io.github.cowwoc.digitalocean.compute.resource.ComputeDropletType;
 import io.github.cowwoc.digitalocean.compute.resource.Droplet;
 import io.github.cowwoc.digitalocean.compute.resource.DropletCreator;
 import io.github.cowwoc.digitalocean.compute.resource.DropletImage;
-import io.github.cowwoc.digitalocean.compute.resource.DropletType;
 import io.github.cowwoc.digitalocean.compute.resource.SshPublicKey;
 import io.github.cowwoc.digitalocean.core.client.Client;
+import io.github.cowwoc.digitalocean.core.id.ComputeDropletTypeId;
+import io.github.cowwoc.digitalocean.core.id.DropletId;
+import io.github.cowwoc.digitalocean.core.id.DropletImageId;
+import io.github.cowwoc.digitalocean.core.id.RegionId;
+import io.github.cowwoc.digitalocean.core.id.SshPublicKeyId;
 import io.github.cowwoc.digitalocean.network.resource.Region;
-import io.github.cowwoc.digitalocean.network.resource.Vpc;
 import io.github.cowwoc.requirements12.annotation.CheckReturnValue;
 
 import java.io.IOException;
@@ -43,7 +46,7 @@ public interface ComputeClient extends Client
 	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
 	 *                               due to shutdown signals.
 	 */
-	List<ComputeRegion> getRegions() throws IOException, InterruptedException;
+	List<Region> getRegions() throws IOException, InterruptedException;
 
 	/**
 	 * Returns the available regions.
@@ -56,7 +59,7 @@ public interface ComputeClient extends Client
 	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
 	 *                               due to shutdown signals.
 	 */
-	List<ComputeRegion> getRegions(boolean canCreateDroplets) throws IOException, InterruptedException;
+	List<Region> getRegions(boolean canCreateDroplets) throws IOException, InterruptedException;
 
 	/**
 	 * Returns the regions that match a predicate.
@@ -70,7 +73,7 @@ public interface ComputeClient extends Client
 	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
 	 *                               due to shutdown signals.
 	 */
-	List<ComputeRegion> getRegions(Predicate<ComputeRegion> predicate) throws IOException, InterruptedException;
+	List<Region> getRegions(Predicate<Region> predicate) throws IOException, InterruptedException;
 
 	/**
 	 * Looks up a region by its ID.
@@ -84,7 +87,7 @@ public interface ComputeClient extends Client
 	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
 	 *                               due to shutdown signals.
 	 */
-	ComputeRegion getRegion(Region.Id id) throws IOException, InterruptedException;
+	Region getRegion(RegionId id) throws IOException, InterruptedException;
 
 	/**
 	 * Returns the first region that matches a predicate.
@@ -98,21 +101,7 @@ public interface ComputeClient extends Client
 	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
 	 *                               due to shutdown signals.
 	 */
-	ComputeRegion getRegion(Predicate<ComputeRegion> predicate) throws IOException, InterruptedException;
-
-	/**
-	 * Looks up the default VPC of a region.
-	 *
-	 * @param regionId the region
-	 * @return the VPC
-	 * @throws NullPointerException  if {@code regionId} is null
-	 * @throws IllegalStateException if the client is closed
-	 * @throws IOException           if an I/O error occurs. These errors are typically transient, and retrying
-	 *                               the request may resolve the issue.
-	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
-	 *                               due to shutdown signals.
-	 */
-	Vpc getDefaultVpc(Region.Id regionId) throws IOException, InterruptedException;
+	Region getRegion(Predicate<Region> predicate) throws IOException, InterruptedException;
 
 	/**
 	 * Returns all the droplet types that are available for creating droplets.
@@ -124,7 +113,7 @@ public interface ComputeClient extends Client
 	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
 	 *                               due to shutdown signals.
 	 */
-	List<DropletType> getDropletTypes() throws IOException, InterruptedException;
+	List<ComputeDropletType> getDropletTypes() throws IOException, InterruptedException;
 
 	/**
 	 * Returns all the droplet types.
@@ -137,7 +126,8 @@ public interface ComputeClient extends Client
 	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
 	 *                               due to shutdown signals.
 	 */
-	List<DropletType> getDropletTypes(boolean canCreateDroplets) throws IOException, InterruptedException;
+	List<ComputeDropletType> getDropletTypes(boolean canCreateDroplets)
+		throws IOException, InterruptedException;
 
 	/**
 	 * Returns the first droplet type that matches a predicate.
@@ -151,7 +141,7 @@ public interface ComputeClient extends Client
 	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
 	 *                               due to shutdown signals.
 	 */
-	DropletType getDropletType(Predicate<DropletType> predicate)
+	ComputeDropletType getDropletType(Predicate<ComputeDropletType> predicate)
 		throws IOException, InterruptedException;
 
 	/**
@@ -191,7 +181,7 @@ public interface ComputeClient extends Client
 	 * @throws InterruptedException if the thread is interrupted while waiting for a response. This can happen
 	 *                              due to shutdown signals.
 	 */
-	DropletImage getDropletImage(DropletImage.Id id) throws IOException, InterruptedException;
+	DropletImage getDropletImage(DropletImageId id) throws IOException, InterruptedException;
 
 	/**
 	 * Returns all the droplet images.
@@ -229,7 +219,7 @@ public interface ComputeClient extends Client
 	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
 	 *                               due to shutdown signals.
 	 */
-	Droplet getDroplet(Droplet.Id id) throws IOException, InterruptedException;
+	Droplet getDroplet(DropletId id) throws IOException, InterruptedException;
 
 	/**
 	 * Returns the first droplet that matches a predicate.
@@ -292,10 +282,9 @@ public interface ComputeClient extends Client
 	 *                                    are empty.</li>
 	 *                                  </ul>
 	 * @throws IllegalStateException    if the client is closed
-	 * @see ComputeClient#getDefaultVpc(Region.Id)
 	 */
 	@CheckReturnValue
-	DropletCreator createDroplet(String name, DropletType.Id typeId, DropletImage.Id imageId);
+	DropletCreator createDroplet(String name, ComputeDropletTypeId typeId, DropletImageId imageId);
 
 	/**
 	 * Returns all the SSH keys.
@@ -350,7 +339,7 @@ public interface ComputeClient extends Client
 	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
 	 *                               due to shutdown signals.
 	 */
-	SshPublicKey getSshPublicKey(SshPublicKey.Id id) throws IOException, InterruptedException;
+	SshPublicKey getSshPublicKey(SshPublicKeyId id) throws IOException, InterruptedException;
 
 	/**
 	 * Looks up an SSH key by its fingerprint.
@@ -409,7 +398,7 @@ public interface ComputeClient extends Client
 	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
 	 *                               due to shutdown signals.
 	 */
-	Integer getCurrentDropletId() throws IOException, InterruptedException;
+	DropletId getCurrentDropletId() throws IOException, InterruptedException;
 
 	/**
 	 * Returns the hostname of the droplet that the JVM is running on.
@@ -433,5 +422,5 @@ public interface ComputeClient extends Client
 	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
 	 *                               due to shutdown signals.
 	 */
-	String getCurrentDropletRegion() throws IOException, InterruptedException;
+	RegionId getCurrentDropletRegionId() throws IOException, InterruptedException;
 }

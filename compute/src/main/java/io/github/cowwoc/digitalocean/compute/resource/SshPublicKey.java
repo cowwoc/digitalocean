@@ -1,6 +1,6 @@
 package io.github.cowwoc.digitalocean.compute.resource;
 
-import io.github.cowwoc.digitalocean.core.id.IntegerId;
+import io.github.cowwoc.digitalocean.core.id.SshPublicKeyId;
 
 import java.io.IOException;
 
@@ -10,22 +10,11 @@ import java.io.IOException;
 public interface SshPublicKey
 {
 	/**
-	 * Creates a new ID.
-	 *
-	 * @param value the server-side identifier
-	 * @return the type-safe identifier for the resource
-	 */
-	static Id id(int value)
-	{
-		return new Id(value);
-	}
-
-	/**
 	 * Returns the ID of the public key.
 	 *
 	 * @return the ID
 	 */
-	Id getId();
+	SshPublicKeyId getId();
 
 	/**
 	 * Returns the name of the public key.
@@ -42,7 +31,7 @@ public interface SshPublicKey
 	String getFingerprint();
 
 	/**
-	 * Destroys the SSH key.
+	 * Destroys the SSH key. If the key does not exist, this method does nothing.
 	 *
 	 * @throws IllegalStateException if the client is closed
 	 * @throws IOException           if an I/O error occurs. These errors are typically transient, and retrying
@@ -51,21 +40,4 @@ public interface SshPublicKey
 	 *                               due to shutdown signals.
 	 */
 	void destroy() throws IOException, InterruptedException;
-
-	/**
-	 * A type-safe identifier for this type of resource.
-	 * <p>
-	 * This adds type-safety to API methods by ensuring that IDs specific to one class cannot be used in place
-	 * of IDs belonging to another class.
-	 */
-	final class Id extends IntegerId
-	{
-		/**
-		 * @param value a server-side identifier
-		 */
-		private Id(int value)
-		{
-			super(value);
-		}
-	}
 }

@@ -2,6 +2,15 @@ Minor updates involving cosmetic changes have been omitted from this list.
 
 See https://github.com/cowwoc/digitalocean/commits/main for a full list.
 
+## Version 0.13 - 2025/07/24
+
+* Renamed `*.Id` classes to `*Id`. For example, `Project.Id` is now `ProjectId`.
+* Moved all IDs to the core module so now any module can reference other type of resources without needing to
+  declare the associated module as a dependency.
+* `DatabaseCreator.tags()`, `DatabaseCreator.firewallRules()`, `DropletCreator.tags()`,
+  `KubernetesCreator.tags()`, `KubernetesCreator.nodePools()`, `KubernetesCreator.NodePoolBuilder.labels()`
+  and `KubernetesCreator.NodePoolBuilder.taints()` no longer remove existing elements before adding new ones.
+
 ## Version 0.12 - 2025/07/18
 
 * Renamed groupId from `com.github.cowwoc.digitalocean` to `io.github.cowwoc.digitalocean`.

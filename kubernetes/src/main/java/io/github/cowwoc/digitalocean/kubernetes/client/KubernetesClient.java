@@ -1,13 +1,13 @@
 package io.github.cowwoc.digitalocean.kubernetes.client;
 
 import io.github.cowwoc.digitalocean.core.client.Client;
+import io.github.cowwoc.digitalocean.core.id.KubernetesId;
+import io.github.cowwoc.digitalocean.core.id.RegionId;
 import io.github.cowwoc.digitalocean.kubernetes.internal.client.DefaultKubernetesClient;
 import io.github.cowwoc.digitalocean.kubernetes.resource.Kubernetes;
-import io.github.cowwoc.digitalocean.kubernetes.resource.Kubernetes.Id;
 import io.github.cowwoc.digitalocean.kubernetes.resource.KubernetesCreator;
 import io.github.cowwoc.digitalocean.kubernetes.resource.KubernetesCreator.NodePoolBuilder;
 import io.github.cowwoc.digitalocean.kubernetes.resource.KubernetesVersion;
-import io.github.cowwoc.digitalocean.network.resource.Region;
 import io.github.cowwoc.requirements12.annotation.CheckReturnValue;
 
 import java.io.IOException;
@@ -24,9 +24,8 @@ public interface KubernetesClient extends Client
 	 * Returns a client.
 	 *
 	 * @return the client
-	 * @throws IOException if an I/O error occurs while building the client
 	 */
-	static KubernetesClient build() throws IOException
+	static KubernetesClient build()
 	{
 		return new DefaultKubernetesClient();
 	}
@@ -41,7 +40,7 @@ public interface KubernetesClient extends Client
 	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
 	 *                               due to shutdown signals.
 	 */
-	List<Kubernetes> getKubernetesClusters() throws IOException, InterruptedException;
+	List<Kubernetes> getClusters() throws IOException, InterruptedException;
 
 	/**
 	 * Returns the first Kubernetes cluster that matches a predicate.
@@ -55,8 +54,7 @@ public interface KubernetesClient extends Client
 	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
 	 *                               due to shutdown signals.
 	 */
-	List<Kubernetes> getKubernetesClusters(Predicate<Kubernetes> predicate)
-		throws IOException, InterruptedException;
+	List<Kubernetes> getClusters(Predicate<Kubernetes> predicate) throws IOException, InterruptedException;
 
 	/**
 	 * Looks up a Kubernetes cluster by its ID.
@@ -70,7 +68,7 @@ public interface KubernetesClient extends Client
 	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
 	 *                               due to shutdown signals.
 	 */
-	Kubernetes getKubernetesCluster(Id id) throws IOException, InterruptedException;
+	Kubernetes getCluster(KubernetesId id) throws IOException, InterruptedException;
 
 	/**
 	 * Returns the first Kubernetes cluster that matches a predicate.
@@ -84,7 +82,7 @@ public interface KubernetesClient extends Client
 	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
 	 *                               due to shutdown signals.
 	 */
-	Kubernetes getKubernetesCluster(Predicate<Kubernetes> predicate) throws IOException, InterruptedException;
+	Kubernetes getCluster(Predicate<Kubernetes> predicate) throws IOException, InterruptedException;
 
 	/**
 	 * Creates a new Kubernetes cluster.
@@ -99,6 +97,6 @@ public interface KubernetesClient extends Client
 	 *                                  empty
 	 */
 	@CheckReturnValue
-	KubernetesCreator createKubernetesCluster(String name, Region.Id region, KubernetesVersion version,
+	KubernetesCreator createCluster(String name, RegionId region, KubernetesVersion version,
 		Set<NodePoolBuilder> nodePools);
 }

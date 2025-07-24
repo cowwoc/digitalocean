@@ -1,14 +1,14 @@
 package io.github.cowwoc.digitalocean.kubernetes.internal.client;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import io.github.cowwoc.digitalocean.core.id.KubernetesId;
+import io.github.cowwoc.digitalocean.core.id.RegionId;
 import io.github.cowwoc.digitalocean.core.internal.client.AbstractInternalClient;
 import io.github.cowwoc.digitalocean.kubernetes.client.KubernetesClient;
 import io.github.cowwoc.digitalocean.kubernetes.resource.Kubernetes;
-import io.github.cowwoc.digitalocean.kubernetes.resource.Kubernetes.Id;
 import io.github.cowwoc.digitalocean.kubernetes.resource.KubernetesCreator;
 import io.github.cowwoc.digitalocean.kubernetes.resource.KubernetesCreator.NodePoolBuilder;
 import io.github.cowwoc.digitalocean.kubernetes.resource.KubernetesVersion;
-import io.github.cowwoc.digitalocean.network.resource.Region;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -40,13 +40,13 @@ public class DefaultKubernetesClient extends AbstractInternalClient
 	}
 
 	@Override
-	public List<Kubernetes> getKubernetesClusters() throws IOException, InterruptedException
+	public List<Kubernetes> getClusters() throws IOException, InterruptedException
 	{
-		return getKubernetesClusters(_ -> true);
+		return getClusters(_ -> true);
 	}
 
 	@Override
-	public List<Kubernetes> getKubernetesClusters(Predicate<Kubernetes> predicate)
+	public List<Kubernetes> getClusters(Predicate<Kubernetes> predicate)
 		throws IOException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/digitalocean/#tag/Kubernetes/operation/kubernetes_list_clusters
@@ -64,13 +64,13 @@ public class DefaultKubernetesClient extends AbstractInternalClient
 	}
 
 	@Override
-	public Kubernetes getKubernetesCluster(Id id) throws IOException, InterruptedException
+	public Kubernetes getCluster(KubernetesId id) throws IOException, InterruptedException
 	{
-		return getKubernetesCluster(cluster -> cluster.getId().equals(id));
+		return getCluster(cluster -> cluster.getId().equals(id));
 	}
 
 	@Override
-	public Kubernetes getKubernetesCluster(Predicate<Kubernetes> predicate)
+	public Kubernetes getCluster(Predicate<Kubernetes> predicate)
 		throws IOException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/digitalocean/#tag/Kubernetes/operation/kubernetes_list_clusters
@@ -87,7 +87,7 @@ public class DefaultKubernetesClient extends AbstractInternalClient
 	}
 
 	@Override
-	public KubernetesCreator createKubernetesCluster(String name, Region.Id region, KubernetesVersion version,
+	public KubernetesCreator createCluster(String name, RegionId region, KubernetesVersion version,
 		Set<NodePoolBuilder> nodePools)
 	{
 		return new DefaultKubernetesCreator(this, name, region, version, nodePools);

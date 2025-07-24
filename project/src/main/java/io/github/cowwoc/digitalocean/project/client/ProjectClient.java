@@ -1,9 +1,9 @@
 package io.github.cowwoc.digitalocean.project.client;
 
 import io.github.cowwoc.digitalocean.core.client.Client;
+import io.github.cowwoc.digitalocean.core.id.ProjectId;
 import io.github.cowwoc.digitalocean.project.internal.client.DefaultProjectClient;
 import io.github.cowwoc.digitalocean.project.resource.Project;
-import io.github.cowwoc.digitalocean.project.resource.Project.Id;
 
 import java.io.IOException;
 import java.util.List;
@@ -18,9 +18,8 @@ public interface ProjectClient extends Client
 	 * Returns a client.
 	 *
 	 * @return the client
-	 * @throws IOException if an I/O error occurs while building the client
 	 */
-	static ProjectClient build() throws IOException
+	static ProjectClient build()
 	{
 		return new DefaultProjectClient();
 	}
@@ -63,7 +62,7 @@ public interface ProjectClient extends Client
 	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
 	 *                               due to shutdown signals.
 	 */
-	Project getProject(Id id) throws IOException, InterruptedException;
+	Project getProject(ProjectId id) throws IOException, InterruptedException;
 
 	/**
 	 * Returns the first project that matches a predicate.

@@ -1,12 +1,14 @@
 package io.github.cowwoc.digitalocean.database.resource;
 
-import io.github.cowwoc.digitalocean.compute.client.ComputeClient;
+import com.fasterxml.jackson.annotation.JsonTypeInfo.Id;
 import io.github.cowwoc.digitalocean.core.exception.AccessDeniedException;
+import io.github.cowwoc.digitalocean.core.exception.UnsupportedCombinationException;
+import io.github.cowwoc.digitalocean.core.id.ProjectId;
+import io.github.cowwoc.digitalocean.core.id.VpcId;
 import io.github.cowwoc.digitalocean.core.internal.util.Strings;
 import io.github.cowwoc.digitalocean.core.internal.util.ToStringBuilder;
 import io.github.cowwoc.digitalocean.core.util.CreateResult;
-import io.github.cowwoc.digitalocean.network.resource.Region.Id;
-import io.github.cowwoc.digitalocean.network.resource.Vpc;
+import io.github.cowwoc.digitalocean.network.client.NetworkClient;
 
 import java.io.IOException;
 import java.time.DayOfWeek;
@@ -31,13 +33,13 @@ public interface DatabaseCreator
 	DatabaseCreator version(String version);
 
 	/**
-	 * Sets the VPC to deploy the cluster in.
+	 * Sets the VPC to deploy the cluster into.
 	 *
 	 * @param vpc {@code null} to deploy the cluster into the region's
-	 *            {@link ComputeClient#getDefaultVpc(Id) default} VPC
+	 *            {@link NetworkClient#getDefaultVpcId(Id) default} VPC
 	 * @return this
 	 */
-	DatabaseCreator vpc(Vpc.Id vpc);
+	DatabaseCreator vpcId(VpcId vpc);
 
 	/**
 	 * Adds a tag to the cluster.
@@ -55,7 +57,7 @@ public interface DatabaseCreator
 	DatabaseCreator tag(String tag);
 
 	/**
-	 * Sets the tags of the cluster.
+	 * Adds tags to the cluster.
 	 *
 	 * @param tags the tags
 	 * @return this
@@ -78,7 +80,7 @@ public interface DatabaseCreator
 	 * @throws NullPointerException     if {@code projectId} is null
 	 * @throws IllegalArgumentException if {@code projectId} contains leading or trailing whitespace
 	 */
-	DatabaseCreator projectId(String projectId);
+	DatabaseCreator projectId(ProjectId projectId);
 
 	/**
 	 * Adds a firewall rule to the cluster.
@@ -117,19 +119,28 @@ public interface DatabaseCreator
 	DatabaseCreator restoreFrom(RestoreFrom restoreFrom);
 
 	/**
-	 * Creates a new database cluster.
+	 * Creates a new database cluster. If an existing cluster has the same name, it is returned as a conflicting
+	 * resource.
+	 * <p>
+	 * Note: While the {@link DatabaseType} defines the supported {@linkplain DatabaseType#regionIds() regions}
+	 * and {@linkplain DatabaseType#nodeCountToDropletTypes() droplet types}, not all combinations of regions
+	 * and droplet types are valid. The only reliable way to determine whether a specific {@code region} and
+	 * {@code dropletType} pair is supported is to attempt creating a cluster with them. If an
+	 * {@code UnsupportedCombinationException} is thrown, the combination is not supported.
 	 *
 	 * @return the new or conflicting cluster
-	 * @throws IllegalArgumentException if the {@code dropletType} is not supported by managed databases
-	 * @throws IllegalStateException    if the client is closed
-	 * @throws AccessDeniedException    if the client does not have sufficient privileges to execute this
-	 *                                  request
-	 * @throws IOException              if an I/O error occurs. These errors are typically transient, and
-	 *                                  retrying the request may resolve the issue.
-	 * @throws InterruptedException     if the thread is interrupted while waiting for a response. This can
-	 *                                  happen due to shutdown signals.
+	 * @throws IllegalArgumentException        if the {@code dropletType} is not supported by managed databases
+	 * @throws IllegalStateException           if the client is closed
+	 * @throws AccessDeniedException           if the client does not have sufficient privileges to execute this
+	 *                                         request
+	 * @throws IOException                     if an I/O error occurs. These errors are typically transient, and
+	 *                                         retrying the request may resolve the issue.
+	 * @throws InterruptedException            if the thread is interrupted while waiting for a response. This
+	 *                                         can happen due to shutdown signals.
+	 * @throws UnsupportedCombinationException if the DigitalOcean does not support the specified region,
+	 *                                         droplet type combination
 	 */
-	CreateResult<Database> apply() throws IOException, InterruptedException;
+	CreateResult<Database> apply() throws IOException, InterruptedException, UnsupportedCombinationException;
 
 	/**
 	 * Builds a firewall rule.

@@ -19,9 +19,8 @@ public interface RegistryClient extends Client
 	 * Returns a client.
 	 *
 	 * @return the client
-	 * @throws IOException if an I/O error occurs while building the client
 	 */
-	static RegistryClient build() throws IOException
+	static RegistryClient build()
 	{
 		return new DefaultRegistryClient();
 	}

@@ -2,14 +2,18 @@ package io.github.cowwoc.digitalocean.database.internal.client;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.github.cowwoc.digitalocean.compute.resource.DropletType;
-import io.github.cowwoc.digitalocean.core.client.Client;
+import io.github.cowwoc.digitalocean.core.id.DatabaseDropletTypeId;
+import io.github.cowwoc.digitalocean.core.id.DatabaseId;
+import io.github.cowwoc.digitalocean.core.id.DatabaseTypeId;
+import io.github.cowwoc.digitalocean.core.id.ProjectId;
+import io.github.cowwoc.digitalocean.core.id.RegionId;
+import io.github.cowwoc.digitalocean.core.id.VpcId;
 import io.github.cowwoc.digitalocean.core.internal.parser.AbstractParser;
+import io.github.cowwoc.digitalocean.core.internal.parser.CoreParser;
 import io.github.cowwoc.digitalocean.core.internal.util.Strings;
 import io.github.cowwoc.digitalocean.database.resource.Database;
 import io.github.cowwoc.digitalocean.database.resource.Database.Connection;
 import io.github.cowwoc.digitalocean.database.resource.Database.FirewallRule;
-import io.github.cowwoc.digitalocean.database.resource.Database.Id;
 import io.github.cowwoc.digitalocean.database.resource.Database.KafkaPermission;
 import io.github.cowwoc.digitalocean.database.resource.Database.KafkaSettings;
 import io.github.cowwoc.digitalocean.database.resource.Database.KafkaTopicToPermission;
@@ -26,12 +30,9 @@ import io.github.cowwoc.digitalocean.database.resource.Database.UserRole;
 import io.github.cowwoc.digitalocean.database.resource.DatabaseCreator;
 import io.github.cowwoc.digitalocean.database.resource.DatabaseCreator.FirewallRuleBuilder;
 import io.github.cowwoc.digitalocean.database.resource.DatabaseCreator.RestoreFrom;
-import io.github.cowwoc.digitalocean.database.resource.DatabaseType;
+import io.github.cowwoc.digitalocean.database.resource.DatabaseDropletType;
 import io.github.cowwoc.digitalocean.database.resource.Endpoint;
 import io.github.cowwoc.digitalocean.database.resource.ResourceType;
-import io.github.cowwoc.digitalocean.network.internal.resource.NetworkParser;
-import io.github.cowwoc.digitalocean.network.resource.Region;
-import io.github.cowwoc.digitalocean.network.resource.Vpc;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
@@ -48,8 +49,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-import static io.github.cowwoc.digitalocean.database.resource.Database.id;
-import static io.github.cowwoc.digitalocean.database.resource.DatabaseType.Id.OPENSEARCH;
 import static io.github.cowwoc.requirements12.java.DefaultJavaValidators.that;
 
 /**
@@ -57,23 +56,38 @@ import static io.github.cowwoc.requirements12.java.DefaultJavaValidators.that;
  */
 public final class DatabaseParser extends AbstractParser
 {
-	private final NetworkParser networkParser;
+	private final CoreParser coreParser;
 
 	/**
 	 * Creates a new DatabaseParser.
 	 *
 	 * @param client the client configuration
 	 */
-	public DatabaseParser(Client client)
+	public DatabaseParser(DefaultDatabaseClient client)
 	{
 		super(client);
-		this.networkParser = new NetworkParser(client);
+		this.coreParser = new CoreParser(client);
 	}
 
 	@Override
 	protected DefaultDatabaseClient getClient()
 	{
 		return (DefaultDatabaseClient) super.getClient();
+	}
+
+	/**
+	 * Convert a DatabaseDropletType from its server representation.
+	 *
+	 * @param json      the JSON representation
+	 * @param regionIds the regions that the droplets types are in
+	 * @return the droplet type
+	 * @throws NullPointerException     if any of the arguments are null
+	 * @throws IllegalArgumentException if the server response could not be parsed
+	 */
+	public DatabaseDropletType dropletTypeFromServer(JsonNode json, Set<RegionId> regionIds)
+	{
+		DatabaseDropletTypeId id = DatabaseDropletTypeId.of(json.textValue());
+		return new DefaultDatabaseDropletType(id, regionIds);
 	}
 
 	/**
@@ -84,17 +98,17 @@ public final class DatabaseParser extends AbstractParser
 	 * @throws NullPointerException     if {@code json} is null
 	 * @throws IllegalArgumentException if the server response could not be parsed
 	 */
-	public DatabaseType.Id databaseTypeIdFromServer(JsonNode json)
+	public DatabaseTypeId databaseTypeIdFromServer(JsonNode json)
 	{
 		String value = json.textValue();
 		return switch (value)
 		{
-			case "pg" -> DatabaseType.Id.POSTGRESQL;
-			case "mysql" -> DatabaseType.Id.MYSQL;
-			case "redis" -> DatabaseType.Id.REDIS;
-			case "mongodb" -> DatabaseType.Id.MONGODB;
-			case "kafka" -> DatabaseType.Id.KAFKA;
-			case "opensearch" -> OPENSEARCH;
+			case "pg" -> DatabaseTypeId.POSTGRESQL;
+			case "mysql" -> DatabaseTypeId.MYSQL;
+			case "redis" -> DatabaseTypeId.REDIS;
+			case "mongodb" -> DatabaseTypeId.MONGODB;
+			case "kafka" -> DatabaseTypeId.KAFKA;
+			case "opensearch" -> DatabaseTypeId.OPENSEARCH;
 			default -> throw new IllegalArgumentException("Unsupported value: " + value);
 		};
 	}
@@ -102,14 +116,14 @@ public final class DatabaseParser extends AbstractParser
 	/**
 	 * Converts DatabaseType.Id to its server representation.
 	 *
-	 * @param id the ID
+	 * @param typeId the ID
 	 * @return the server representation
-	 * @throws NullPointerException     if {@code json} is null
+	 * @throws NullPointerException     if {@code typeId} is null
 	 * @throws IllegalArgumentException if the server response could not be parsed
 	 */
-	public String databaseTypeIdToServer(DatabaseType.Id id)
+	public String databaseTypeIdToServer(DatabaseTypeId typeId)
 	{
-		return switch (id)
+		return switch (typeId)
 		{
 			case POSTGRESQL -> "pg";
 			case MYSQL -> "mysql";
@@ -137,23 +151,24 @@ public final class DatabaseParser extends AbstractParser
 	{
 		try
 		{
-			Id id = id(json.get("id").textValue());
+			DatabaseId id = DatabaseId.of(json.get("id").textValue());
 			String name = json.get("name").textValue();
-			DatabaseType.Id databaseTypeId = databaseTypeIdFromServer(json.get("engine"));
+			DatabaseTypeId databaseTypeId = databaseTypeIdFromServer(json.get("engine"));
 			String version = json.get("version").textValue();
 			String semanticVersion = json.get("semantic_version").textValue();
 			int numberOfNodes = getInt(json, "num_nodes");
-			DropletType.Id dropletType = DropletType.id(json.get("size").textValue());
+			DatabaseDropletTypeId dropletType = DatabaseDropletTypeId.of(json.get("size").textValue());
 
-			Region.Id region = networkParser.regionIdFromServer(json.get("region"));
+			RegionId regionId = coreParser.regionIdFromServer(json.get("region"));
 			Status status = statusFromServer(json.get("status"));
 
+			DefaultDatabaseClient client = getClient();
 			JsonNode vpcNode = json.get("private_network_uuid");
-			Vpc.Id vpc;
+			VpcId vpcId;
 			if (vpcNode == null)
-				vpc = null;
+				vpcId = client.getDefaultVpcId(regionId);
 			else
-				vpc = Vpc.id(vpcNode.textValue());
+				vpcId = VpcId.of(vpcNode.textValue());
 
 			Set<String> tags = getElements(json, "tags", JsonNode::textValue);
 			Set<String> databaseNames = getElements(json, "db_names", JsonNode::textValue);
@@ -165,7 +180,7 @@ public final class DatabaseParser extends AbstractParser
 			Connection standbyPrivateConnection = connectionFromServer(json.get("standby_private_connection"));
 			Set<User> users = getElements(json, "users", element -> userFromServer(databaseTypeId, element));
 			MaintenanceSchedule maintenanceSchedule = maintenanceScheduleFromServer(json.get("maintenance_window"));
-			String projectId = json.get("project_id").textValue();
+			ProjectId projectId = ProjectId.of(json.get("project_id").textValue());
 			Set<FirewallRule> firewallRules = getElements(json, "rules", this::firewallRuleFromServer);
 
 			JsonNode endOfLifeNode = json.get("version_end_of_life");
@@ -185,8 +200,8 @@ public final class DatabaseParser extends AbstractParser
 			Set<Endpoint> metricsEndpoints = getElements(json, "metrics_endpoints", this::endpointFromServer);
 
 			Instant createdAt = Instant.parse(json.get("created_at").textValue());
-			return new DefaultDatabase(getClient(), id, name, databaseTypeId, version, semanticVersion,
-				numberOfNodes - 1, dropletType, region, status, vpc, tags, databaseNames, openSearchDashboard,
+			return new DefaultDatabase(client, id, name, databaseTypeId, version, semanticVersion,
+				numberOfNodes, dropletType, regionId, status, vpcId, tags, databaseNames, openSearchDashboard,
 				publicConnection, privateConnection, standbyPublicConnection, standbyPrivateConnection, users,
 				maintenanceSchedule, projectId, firewallRules, versionEndOfLife, versionEndOfAvailability,
 				additionalStorageInMiB, metricsEndpoints, createdAt);
@@ -251,7 +266,7 @@ public final class DatabaseParser extends AbstractParser
 	 * @throws NullPointerException     if any of the arguments are null
 	 * @throws IllegalArgumentException if the server response could not be parsed
 	 */
-	private User userFromServer(DatabaseType.Id databaseTypeId, JsonNode json)
+	private User userFromServer(DatabaseTypeId databaseTypeId, JsonNode json)
 	{
 		String name = json.get("name").textValue();
 		UserRole role = userRoleFromServer(json.get("role"));

@@ -1,5 +1,6 @@
 package io.github.cowwoc.digitalocean.registry.internal.resource;
 
+import io.github.cowwoc.digitalocean.core.id.ContainerImageId;
 import io.github.cowwoc.digitalocean.core.internal.util.ToStringBuilder;
 import io.github.cowwoc.digitalocean.registry.resource.ContainerImage;
 import io.github.cowwoc.digitalocean.registry.resource.Repository;
@@ -13,7 +14,7 @@ import static io.github.cowwoc.requirements12.java.DefaultJavaValidators.require
 public final class DefaultContainerImage implements ContainerImage
 {
 	private final Repository repository;
-	private final Id id;
+	private final ContainerImageId id;
 	private final Set<String> tags;
 	private final Set<Layer> layers;
 
@@ -27,7 +28,8 @@ public final class DefaultContainerImage implements ContainerImage
 	 * @throws NullPointerException     if any of the arguments are null
 	 * @throws IllegalArgumentException if {@code id} contains leading or trailing whitespace or is empty
 	 */
-	public DefaultContainerImage(Repository repository, Id id, Set<String> tags, Set<Layer> layers)
+	public DefaultContainerImage(Repository repository, ContainerImageId id, Set<String> tags,
+		Set<Layer> layers)
 	{
 		requireThat(repository, "repository").isNotNull();
 		requireThat(id, "id").isNotNull();
@@ -45,7 +47,7 @@ public final class DefaultContainerImage implements ContainerImage
 	}
 
 	@Override
-	public Id getId()
+	public ContainerImageId getId()
 	{
 		return id;
 	}

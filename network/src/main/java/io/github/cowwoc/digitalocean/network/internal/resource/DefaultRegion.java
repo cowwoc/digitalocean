@@ -1,7 +1,7 @@
-package io.github.cowwoc.digitalocean.compute.internal.resource;
+package io.github.cowwoc.digitalocean.network.internal.resource;
 
-import io.github.cowwoc.digitalocean.compute.resource.ComputeRegion;
-import io.github.cowwoc.digitalocean.compute.resource.DropletType;
+import io.github.cowwoc.digitalocean.core.id.ComputeDropletTypeId;
+import io.github.cowwoc.digitalocean.core.id.RegionId;
 import io.github.cowwoc.digitalocean.core.internal.util.ToStringBuilder;
 import io.github.cowwoc.digitalocean.network.resource.Region;
 
@@ -9,13 +9,13 @@ import java.util.Set;
 
 import static io.github.cowwoc.requirements12.java.DefaultJavaValidators.requireThat;
 
-public final class DefaultComputeRegion implements ComputeRegion
+public final class DefaultRegion implements Region
 {
-	private final Id id;
+	private final RegionId id;
 	private final String name;
-	private final Set<ComputeRegion.Feature> features;
+	private final Set<Feature> features;
 	private final boolean canCreateDroplets;
-	private final Set<DropletType.Id> dropletTypeIds;
+	private final Set<ComputeDropletTypeId> dropletTypeIds;
 
 	/**
 	 * Creates a Region.
@@ -28,8 +28,8 @@ public final class DefaultComputeRegion implements ComputeRegion
 	 * @throws NullPointerException     if any of the arguments are null
 	 * @throws IllegalArgumentException if {@code name} contains leading or trailing whitespace or is empty
 	 */
-	public DefaultComputeRegion(Id id, String name, Set<ComputeRegion.Feature> features,
-		boolean canCreateDroplets, Set<DropletType.Id> dropletTypeIds)
+	public DefaultRegion(RegionId id, String name, Set<Feature> features, boolean canCreateDroplets,
+		Set<ComputeDropletTypeId> dropletTypeIds)
 	{
 		requireThat(id, "id").isNotNull();
 		requireThat(name, "name").isStripped().isNotEmpty();
@@ -44,7 +44,7 @@ public final class DefaultComputeRegion implements ComputeRegion
 	}
 
 	@Override
-	public Id getId()
+	public RegionId getId()
 	{
 		return id;
 	}
@@ -68,7 +68,7 @@ public final class DefaultComputeRegion implements ComputeRegion
 	}
 
 	@Override
-	public Set<DropletType.Id> getDropletTypeIds()
+	public Set<ComputeDropletTypeId> getDropletTypeIds()
 	{
 		return dropletTypeIds;
 	}
@@ -88,7 +88,7 @@ public final class DefaultComputeRegion implements ComputeRegion
 	@Override
 	public String toString()
 	{
-		return new ToStringBuilder(DefaultComputeRegion.class).
+		return new ToStringBuilder(DefaultRegion.class).
 			add("id", id).
 			add("name", name).
 			add("features", features).

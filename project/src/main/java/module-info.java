@@ -4,8 +4,7 @@
 module io.github.cowwoc.digitalocean.project
 {
 	requires transitive io.github.cowwoc.digitalocean.core;
-	requires io.github.cowwoc.digitalocean.compute;
-	requires io.github.cowwoc.digitalocean.network;
+	requires static io.github.cowwoc.digitalocean.network;
 	requires io.github.cowwoc.pouch.core;
 	requires io.github.cowwoc.requirements12.java;
 	requires com.fasterxml.jackson.databind;

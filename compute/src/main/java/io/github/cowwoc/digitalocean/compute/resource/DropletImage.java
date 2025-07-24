@@ -1,7 +1,7 @@
 package io.github.cowwoc.digitalocean.compute.resource;
 
-import io.github.cowwoc.digitalocean.core.id.IntegerId;
-import io.github.cowwoc.digitalocean.network.resource.Region;
+import io.github.cowwoc.digitalocean.core.id.DropletImageId;
+import io.github.cowwoc.digitalocean.core.id.RegionId;
 
 import java.time.Instant;
 import java.util.Set;
@@ -12,22 +12,11 @@ import java.util.Set;
 public interface DropletImage
 {
 	/**
-	 * Creates a new ID.
-	 *
-	 * @param value the server-side identifier
-	 * @return the type-safe identifier for the resource
-	 */
-	static Id id(int value)
-	{
-		return new Id(value);
-	}
-
-	/**
 	 * Returns the ID of the image.
 	 *
 	 * @return the ID of the image
 	 */
-	Id getId();
+	DropletImageId getId();
 
 	/**
 	 * Returns the slug of the image.
@@ -62,7 +51,7 @@ public interface DropletImage
 	 *
 	 * @return the regions
 	 */
-	Set<Region.Id> getRegionIds();
+	Set<RegionId> getRegionIds();
 
 	/**
 	 * Returns the type of the image.
@@ -119,23 +108,6 @@ public interface DropletImage
 	 * @return the time
 	 */
 	Instant getCreatedAt();
-
-	/**
-	 * A type-safe identifier for this type of resource.
-	 * <p>
-	 * This adds type-safety to API methods by ensuring that IDs specific to one class cannot be used in place
-	 * of IDs belonging to another class.
-	 */
-	final class Id extends IntegerId
-	{
-		/**
-		 * @param value a server-side identifier
-		 */
-		private Id(int value)
-		{
-			super(value);
-		}
-	}
 
 	/**
 	 * The image of the image.

@@ -1,9 +1,7 @@
 package io.github.cowwoc.digitalocean.network.resource;
 
-import io.github.cowwoc.digitalocean.core.id.StringId;
-import io.github.cowwoc.digitalocean.core.internal.util.Strings;
-
-import static io.github.cowwoc.requirements12.java.DefaultJavaValidators.requireThat;
+import io.github.cowwoc.digitalocean.core.id.RegionId;
+import io.github.cowwoc.digitalocean.core.id.VpcId;
 
 /**
  * Represents a private network, also known as a Virtual Private Cloud (VPC).
@@ -21,50 +19,16 @@ import static io.github.cowwoc.requirements12.java.DefaultJavaValidators.require
 public interface Vpc
 {
 	/**
-	 * Creates a new ID.
-	 *
-	 * @param value the server-side identifier
-	 * @return the type-safe identifier for the resource
-	 * @throws IllegalArgumentException if {@code value} contains whitespace or is empty
-	 */
-	static Id id(String value)
-	{
-		if (value == null)
-			return null;
-		return new Id(value);
-	}
-
-	/**
 	 * Returns the VPC's ID.
 	 *
 	 * @return the id
 	 */
-	Id getId();
+	VpcId getId();
 
 	/**
 	 * Returns the region that the VPC is in.
 	 *
 	 * @return the region
 	 */
-	Region.Id getRegion();
-
-	/**
-	 * A type-safe identifier for this type of resource.
-	 * <p>
-	 * This adds type-safety to API methods by ensuring that IDs specific to one class cannot be used in place
-	 * of IDs belonging to another class.
-	 */
-	final class Id extends StringId
-	{
-		/**
-		 * @param value a server-side identifier
-		 * @throws NullPointerException     if {@code value} is null
-		 * @throws IllegalArgumentException if {@code value} is not a valid UUID
-		 */
-		private Id(String value)
-		{
-			super(value);
-			requireThat(value, "value").matches(Strings.UUID);
-		}
-	}
+	RegionId getRegionId();
 }

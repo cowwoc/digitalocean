@@ -1,10 +1,14 @@
 package io.github.cowwoc.digitalocean.network.resource;
 
+import io.github.cowwoc.digitalocean.core.id.ComputeDropletTypeId;
+import io.github.cowwoc.digitalocean.core.id.RegionId;
+
+import java.util.Set;
+
 /**
  * A geographical region that contains one or more <a
  * href="https://docs.digitalocean.com/platform/regional-availability/">datacenters</a>.
  */
-@FunctionalInterface
 public interface Region
 {
 	/**
@@ -12,75 +16,64 @@ public interface Region
 	 *
 	 * @return the ID
 	 */
-	Id getId();
+	RegionId getId();
 
 	/**
-	 * A type-safe identifier for this type of resource.
-	 * <p>
-	 * This adds type-safety to API methods by ensuring that IDs specific to one class cannot be used in place
-	 * of IDs belonging to another class.
+	 * Returns the region's name.
+	 *
+	 * @return the name
 	 */
-	enum Id
+	String getName();
+
+	/**
+	 * Returns the features that are available in this region.
+	 *
+	 * @return the features
+	 */
+	Set<Feature> getFeatures();
+
+	/**
+	 * Determines if new droplets can be created in this region.
+	 *
+	 * @return {@code true} if new droplets can be created
+	 */
+	boolean canCreateDroplets();
+
+	/**
+	 * Returns the droplet types that can be created in this region.
+	 *
+	 * @return the droplet types
+	 */
+	Set<ComputeDropletTypeId> getDropletTypeIds();
+
+	/**
+	 * Region features.
+	 */
+	enum Feature
 	{
 		/**
-		 * Atlanta, United States, data center 1.
+		 * System-level backups at weekly or daily intervals.
 		 */
-		ATLANTA1,
+		BACKUPS,
 		/**
-		 * New York, United States, data center 1.
+		 * Network communication over IPv6.
 		 */
-		NEW_YORK1,
+		IPV6,
 		/**
-		 * New York, United States, data center 2.
+		 * The metadata service, allowing droplets to query metadata from within the droplet itself.
 		 */
-		NEW_YORK2,
+		METADATA,
 		/**
-		 * New York, United States, data center 3.
+		 * Ability to install a metrics agent on droplets.
 		 */
-		NEW_YORK3,
+		INSTALL_AGENT,
 		/**
-		 * San Francisco, United States, data center 1.
+		 * Ability to use the Spaces and Block Storage Volume services.
 		 */
-		SAN_FRANCISCO1,
+		STORAGE,
 		/**
-		 * San Francisco, United States, data center 2.
+		 * Ability to use custom droplet images within this region.
 		 */
-		SAN_FRANCISCO2,
-		/**
-		 * San Francisco, United States, data center 3.
-		 */
-		SAN_FRANCISCO3,
-		/**
-		 * Amsterdam, Netherlands, data center 2.
-		 */
-		AMSTERDAM2,
-		/**
-		 * Amsterdam, Netherlands, data center 3.
-		 */
-		AMSTERDAM3,
-		/**
-		 * Singapore, Singapore, data center 1.
-		 */
-		SINGAPORE1,
-		/**
-		 * London, United Kingdom, data center 1.
-		 */
-		LONDON1,
-		/**
-		 * Frankfurt, Germany, data center 1.
-		 */
-		FRANCE1,
-		/**
-		 * Toronto, Canada, data center 1.
-		 */
-		TORONTO1,
-		/**
-		 * Bangalore, India, data center 1.
-		 */
-		BANGALORE1,
-		/**
-		 * Sydney, Australia, data center 1.
-		 */
-		SYDNEY1;
+		IMAGE_TRANSFER
 	}
 }

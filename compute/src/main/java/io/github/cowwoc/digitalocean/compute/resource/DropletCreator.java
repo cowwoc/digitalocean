@@ -1,11 +1,11 @@
 package io.github.cowwoc.digitalocean.compute.resource;
 
-import io.github.cowwoc.digitalocean.compute.client.ComputeClient;
+import com.fasterxml.jackson.annotation.JsonTypeInfo.Id;
 import io.github.cowwoc.digitalocean.core.exception.AccessDeniedException;
+import io.github.cowwoc.digitalocean.core.id.RegionId;
+import io.github.cowwoc.digitalocean.core.id.VpcId;
 import io.github.cowwoc.digitalocean.core.internal.util.ToStringBuilder;
-import io.github.cowwoc.digitalocean.network.resource.Region;
-import io.github.cowwoc.digitalocean.network.resource.Region.Id;
-import io.github.cowwoc.digitalocean.network.resource.Vpc;
+import io.github.cowwoc.digitalocean.network.client.NetworkClient;
 
 import java.io.IOException;
 import java.time.DayOfWeek;
@@ -23,10 +23,10 @@ public interface DropletCreator
 	 * Sets the VPC to deploy the droplet in.
 	 *
 	 * @param vpc    {@code null} to deploy the droplet into the region's
-	 * {@link ComputeClient#getDefaultVpc(Id) default} VPC
+	 * {@link NetworkClient#getDefaultVpcId(Id) default} VPC
 	 * @return this
 	 */
-	DropletCreator vpcId(Vpc.Id vpc);
+	DropletCreator vpcId(VpcId vpc);
 
 	/**
 	 * Sets the region to create the droplet in. By default, droplets may be deployed in any region.
@@ -35,7 +35,7 @@ public interface DropletCreator
 	 * @return this
 	 * @throws NullPointerException if {@code region} is null
 	 */
-	DropletCreator regionId(Region.Id region);
+	DropletCreator regionId(RegionId region);
 
 	/**
 	 * Adds an SSH key that may be used to connect to the droplet.
@@ -88,7 +88,7 @@ public interface DropletCreator
 	DropletCreator tag(String tag);
 
 	/**
-	 * Sets the tags of the droplet.
+	 * Adds tags to the droplet.
 	 *
 	 * @param tags the tags
 	 * @return this

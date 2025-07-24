@@ -1,8 +1,9 @@
 package io.github.cowwoc.digitalocean.compute.internal.resource;
 
 import io.github.cowwoc.digitalocean.compute.resource.DropletImage;
+import io.github.cowwoc.digitalocean.core.id.DropletImageId;
+import io.github.cowwoc.digitalocean.core.id.RegionId;
 import io.github.cowwoc.digitalocean.core.internal.util.ToStringBuilder;
-import io.github.cowwoc.digitalocean.network.resource.Region;
 
 import java.time.Instant;
 import java.util.Set;
@@ -11,12 +12,12 @@ import static io.github.cowwoc.requirements12.java.DefaultJavaValidators.require
 
 public final class DefaultDropletImage implements DropletImage
 {
-	private final Id id;
+	private final DropletImageId id;
 	private final String slug;
 	private final String name;
 	private final String distribution;
 	private final boolean isPublic;
-	private final Set<Region.Id> regionIds;
+	private final Set<RegionId> regionIds;
 	private final Type type;
 	private final int minDiskSizeInGiB;
 	private final float sizeInGiB;
@@ -52,8 +53,9 @@ public final class DefaultDropletImage implements DropletImage
 	 *                                    <li>{@code sizeInGiB} is negative or zero.</li>
 	 *                                  </ul>
 	 */
-	public DefaultDropletImage(Id id, String slug, String name, String distribution, boolean isPublic,
-		Set<Region.Id> regionIds, Type type, int minDiskSizeInGiB, float sizeInGiB, String description,
+	public DefaultDropletImage(DropletImageId id, String slug, String name, String distribution,
+		boolean isPublic,
+		Set<RegionId> regionIds, Type type, int minDiskSizeInGiB, float sizeInGiB, String description,
 		Set<String> tags, Status status, String errorMessage, Instant createdAt)
 	{
 		requireThat(id, "id").isNotNull();
@@ -87,7 +89,7 @@ public final class DefaultDropletImage implements DropletImage
 	}
 
 	@Override
-	public Id getId()
+	public DropletImageId getId()
 	{
 		return id;
 	}
@@ -117,7 +119,7 @@ public final class DefaultDropletImage implements DropletImage
 	}
 
 	@Override
-	public Set<Region.Id> getRegionIds()
+	public Set<RegionId> getRegionIds()
 	{
 		return regionIds;
 	}

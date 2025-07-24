@@ -1,15 +1,17 @@
 package io.github.cowwoc.digitalocean.network.internal.client;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import io.github.cowwoc.digitalocean.core.id.VpcId;
 import io.github.cowwoc.digitalocean.core.internal.client.AbstractInternalClient;
+import io.github.cowwoc.digitalocean.core.internal.parser.CoreParser;
 import io.github.cowwoc.digitalocean.network.client.NetworkClient;
-import io.github.cowwoc.digitalocean.network.internal.resource.NetworkParser;
+import io.github.cowwoc.digitalocean.network.internal.parser.NetworkParser;
 import io.github.cowwoc.digitalocean.network.resource.Vpc;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Predicate;
 
 import static io.github.cowwoc.requirements12.java.DefaultJavaValidators.requireThat;
@@ -17,7 +19,10 @@ import static io.github.cowwoc.requirements12.java.DefaultJavaValidators.require
 public class DefaultNetworkClient extends AbstractInternalClient
 	implements NetworkClient
 {
-	private final NetworkParser parser = new NetworkParser(this);
+	@SuppressWarnings("this-escape")
+	private final CoreParser coreParser = new CoreParser(this);
+	@SuppressWarnings("this-escape")
+	private final NetworkParser networkParser = new NetworkParser(this);
 
 	/**
 	 * Creates a new DefaultNetworkClient.
@@ -27,36 +32,30 @@ public class DefaultNetworkClient extends AbstractInternalClient
 	}
 
 	/**
-	 * Returns the parser.
-	 *
-	 * @return the parser
+	 * @return the core parser
 	 */
-	public NetworkParser getParser()
+	public CoreParser getCoreParser()
 	{
-		return parser;
+		return coreParser;
+	}
+
+	/**
+	 * @return the network parser
+	 */
+	public NetworkParser getNetworkParser()
+	{
+		return networkParser;
 	}
 
 	@Override
-	public List<Vpc> getVpcs() throws IOException, InterruptedException
+	public Set<Vpc> getVpcs() throws IOException, InterruptedException
 	{
-		return getVpcs(_ -> true);
-	}
-
-	@Override
-	public List<Vpc> getVpcs(Predicate<Vpc> predicate) throws IOException, InterruptedException
-	{
-		requireThat(predicate, "predicate").isNotNull();
-
 		// https://docs.digitalocean.com/reference/api/digitalocean/#tag/VPCs/operation/vpcs_list
-		return getElements(REST_SERVER.resolve("v2/vpcs"), Map.of(), body ->
+		return getElement(REST_SERVER.resolve("v2/vpcs"), Map.of(), body ->
 		{
-			List<Vpc> defaultVpcs = new ArrayList<>();
+			Set<Vpc> defaultVpcs = new HashSet<>();
 			for (JsonNode sshKey : body.get("vpcs"))
-			{
-				Vpc candidate = parser.vpcFromServer(sshKey);
-				if (predicate.test(candidate))
-					defaultVpcs.add(candidate);
-			}
+				defaultVpcs.add(networkParser.vpcFromServer(sshKey));
 			return defaultVpcs;
 		});
 	}
@@ -69,7 +68,7 @@ public class DefaultNetworkClient extends AbstractInternalClient
 		{
 			for (JsonNode vpcNode : body.get("vpcs"))
 			{
-				Vpc candidate = parser.vpcFromServer(vpcNode);
+				Vpc candidate = networkParser.vpcFromServer(vpcNode);
 				if (predicate.test(candidate))
 					return candidate;
 			}
@@ -78,7 +77,7 @@ public class DefaultNetworkClient extends AbstractInternalClient
 	}
 
 	@Override
-	public Vpc getVpc(Vpc.Id id) throws IOException, InterruptedException
+	public Vpc getVpc(VpcId id) throws IOException, InterruptedException
 	{
 		requireThat(id, "id").isNotNull();
 
@@ -86,7 +85,7 @@ public class DefaultNetworkClient extends AbstractInternalClient
 		return getResource(REST_SERVER.resolve("v2/vpcs/" + id), body ->
 		{
 			JsonNode vpc = body.get("vpc");
-			return parser.vpcFromServer(vpc);
+			return networkParser.vpcFromServer(vpc);
 		});
 	}
 }

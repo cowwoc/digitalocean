@@ -1,9 +1,9 @@
 package io.github.cowwoc.digitalocean.test;
 
 import io.github.cowwoc.digitalocean.compute.client.ComputeClient;
+import io.github.cowwoc.digitalocean.compute.resource.ComputeDropletType;
 import io.github.cowwoc.digitalocean.compute.resource.Droplet;
 import io.github.cowwoc.digitalocean.compute.resource.DropletImage;
-import io.github.cowwoc.digitalocean.compute.resource.DropletType;
 import io.github.cowwoc.digitalocean.core.util.Configuration;
 import io.github.cowwoc.digitalocean.network.resource.Region;
 
@@ -23,12 +23,12 @@ public final class Readme
 			client.login(accessToken);
 
 			DropletImage image = client.getDropletImage("debian-12-x64");
-			Region region = client.getRegions().getFirst();
+			Region region = client.getRegions(true).getFirst();
 
 			// Get the least expensive droplet type with at least 2 GiB of memory
-			DropletType dropletType = client.getDropletTypes().stream().filter(type ->
+			ComputeDropletType dropletType = client.getDropletTypes().stream().filter(type ->
 					type.getRegionIds().contains(region.getId()) && type.getRamInMiB() >= 2 * 1024).
-				min(Comparator.comparing(DropletType::getCostPerHour)).orElseThrow();
+				min(Comparator.comparing(ComputeDropletType::getCostPerHour)).orElseThrow();
 
 			Droplet droplet = client.createDroplet("Node123", dropletType.getId(), image.getId()).apply();
 			while (droplet.getAddresses().isEmpty())

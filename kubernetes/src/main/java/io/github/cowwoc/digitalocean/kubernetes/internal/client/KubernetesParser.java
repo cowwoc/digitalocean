@@ -3,12 +3,14 @@ package io.github.cowwoc.digitalocean.kubernetes.internal.client;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.github.cowwoc.digitalocean.compute.resource.DropletType;
-import io.github.cowwoc.digitalocean.core.client.Client;
+import io.github.cowwoc.digitalocean.core.id.ComputeDropletTypeId;
+import io.github.cowwoc.digitalocean.core.id.KubernetesId;
+import io.github.cowwoc.digitalocean.core.id.RegionId;
+import io.github.cowwoc.digitalocean.core.id.VpcId;
 import io.github.cowwoc.digitalocean.core.internal.parser.AbstractParser;
+import io.github.cowwoc.digitalocean.core.internal.parser.CoreParser;
 import io.github.cowwoc.digitalocean.core.internal.util.Strings;
 import io.github.cowwoc.digitalocean.kubernetes.resource.Kubernetes;
-import io.github.cowwoc.digitalocean.kubernetes.resource.Kubernetes.Id;
 import io.github.cowwoc.digitalocean.kubernetes.resource.Kubernetes.MaintenanceSchedule;
 import io.github.cowwoc.digitalocean.kubernetes.resource.Kubernetes.Node;
 import io.github.cowwoc.digitalocean.kubernetes.resource.Kubernetes.NodePool;
@@ -18,9 +20,6 @@ import io.github.cowwoc.digitalocean.kubernetes.resource.Kubernetes.State;
 import io.github.cowwoc.digitalocean.kubernetes.resource.Kubernetes.Status;
 import io.github.cowwoc.digitalocean.kubernetes.resource.KubernetesCreator.NodePoolBuilder;
 import io.github.cowwoc.digitalocean.kubernetes.resource.KubernetesVersion;
-import io.github.cowwoc.digitalocean.network.internal.resource.NetworkParser;
-import io.github.cowwoc.digitalocean.network.resource.Region;
-import io.github.cowwoc.digitalocean.network.resource.Vpc;
 
 import java.time.DayOfWeek;
 import java.time.Instant;
@@ -37,17 +36,17 @@ import java.util.Set;
  */
 public final class KubernetesParser extends AbstractParser
 {
-	private final NetworkParser networkParser;
+	private final CoreParser coreParser;
 
 	/**
 	 * Creates a new KubernetesParser.
 	 *
 	 * @param client the client configuration
 	 */
-	public KubernetesParser(Client client)
+	public KubernetesParser(DefaultKubernetesClient client)
 	{
 		super(client);
-		this.networkParser = new NetworkParser(client);
+		this.coreParser = new CoreParser(client);
 	}
 
 	@Override
@@ -66,13 +65,13 @@ public final class KubernetesParser extends AbstractParser
 	 */
 	public Kubernetes kubernetesFromServer(JsonNode json)
 	{
-		Id id = Kubernetes.id(json.get("id").textValue());
+		KubernetesId id = KubernetesId.of(json.get("id").textValue());
 		String name = json.get("name").textValue();
-		Region.Id region = networkParser.regionIdFromServer(json.get("region"));
+		RegionId regionId = coreParser.regionIdFromServer(json.get("region"));
 		KubernetesVersion version = kubernetesVersionFromServer(json.get("version"));
 		String clusterSubnet = json.get("cluster_subnet").textValue();
 		String serviceSubnet = json.get("service_subnet").textValue();
-		Vpc.Id vpc = Vpc.id(json.get("vpc_uuid").textValue());
+		VpcId vpc = coreParser.vpcIdFromServer(json.get("vpc_uuid"));
 		String ipv4;
 		JsonNode ipv4Node = json.get("ipv4");
 		if (ipv4Node == null)
@@ -101,9 +100,8 @@ public final class KubernetesParser extends AbstractParser
 		boolean surgeUpgrade = getBoolean(json, "surge_upgrade");
 		boolean ha = getBoolean(json, "ha");
 		boolean canAccessRegistry = getBoolean(json, "registry_enabled");
-		return new DefaultKubernetes(getClient(), id, name, region, version, clusterSubnet, serviceSubnet, vpc,
-			ipv4,
-			endpoint, tags, nodePools, maintenanceSchedule, autoUpgrade, status, surgeUpgrade, ha,
+		return new DefaultKubernetes(getClient(), id, name, regionId, version, clusterSubnet, serviceSubnet, vpc,
+			ipv4, endpoint, tags, nodePools, maintenanceSchedule, autoUpgrade, status, surgeUpgrade, ha,
 			canAccessRegistry, createdAt, updatedAt);
 	}
 
@@ -150,7 +148,7 @@ public final class KubernetesParser extends AbstractParser
 	 */
 	private Kubernetes.NodePool nodePoolFromServer(JsonNode json)
 	{
-		DropletType.Id dropletType = DropletType.id(json.get("size").textValue());
+		ComputeDropletTypeId dropletType = ComputeDropletTypeId.of(json.get("size").textValue());
 		String id = json.get("id").textValue();
 		String name = json.get("name").textValue();
 		int initialNumberOfNodes = getInt(json, "count");

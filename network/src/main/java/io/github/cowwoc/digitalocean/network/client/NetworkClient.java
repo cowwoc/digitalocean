@@ -1,11 +1,13 @@
 package io.github.cowwoc.digitalocean.network.client;
 
 import io.github.cowwoc.digitalocean.core.client.Client;
+import io.github.cowwoc.digitalocean.core.id.RegionId;
+import io.github.cowwoc.digitalocean.core.id.VpcId;
 import io.github.cowwoc.digitalocean.network.internal.client.DefaultNetworkClient;
 import io.github.cowwoc.digitalocean.network.resource.Vpc;
 
 import java.io.IOException;
-import java.util.List;
+import java.util.Set;
 import java.util.function.Predicate;
 
 /**
@@ -25,45 +27,30 @@ public interface NetworkClient extends Client
 	}
 
 	/**
-	 * Returns all the VPCs.
+	 * Looks up the default VPC of a region.
 	 *
-	 * @return an empty list if no match is found
+	 * @param regionId the region
+	 * @return the VPC
+	 * @throws NullPointerException  if {@code regionId} is null
 	 * @throws IllegalStateException if the client is closed
 	 * @throws IOException           if an I/O error occurs. These errors are typically transient, and retrying
 	 *                               the request may resolve the issue.
 	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
 	 *                               due to shutdown signals.
 	 */
-	List<Vpc> getVpcs() throws IOException, InterruptedException;
+	VpcId getDefaultVpcId(RegionId regionId) throws IOException, InterruptedException;
 
 	/**
 	 * Returns all the VPCs.
 	 *
-	 * @param predicate the predicate
-	 * @return an empty list if no match is found
-	 * @throws NullPointerException  if {@code predicate} is null
+	 * @return an empty set if no match is found
 	 * @throws IllegalStateException if the client is closed
 	 * @throws IOException           if an I/O error occurs. These errors are typically transient, and retrying
 	 *                               the request may resolve the issue.
 	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
 	 *                               due to shutdown signals.
 	 */
-	List<Vpc> getVpcs(Predicate<Vpc> predicate) throws IOException, InterruptedException;
-
-	/**
-	 * Looks up a VPC by its ID.
-	 *
-	 * @param id the ID of the VPC
-	 * @return null if no match is found
-	 * @throws NullPointerException     if {@code id} is null
-	 * @throws IllegalArgumentException if {@code id} is not a valid UUID per RFC 9562
-	 * @throws IllegalStateException    if the client is closed
-	 * @throws IOException              if an I/O error occurs. These errors are typically transient, and
-	 *                                  retrying the request may resolve the issue.
-	 * @throws InterruptedException     if the thread is interrupted while waiting for a response. This can
-	 *                                  happen due to shutdown signals.
-	 */
-	Vpc getVpc(Vpc.Id id) throws IOException, InterruptedException;
+	Set<Vpc> getVpcs() throws IOException, InterruptedException;
 
 	/**
 	 * Returns the first VPC that matches a predicate.
@@ -78,4 +65,19 @@ public interface NetworkClient extends Client
 	 *                               due to shutdown signals.
 	 */
 	Vpc getVpc(Predicate<Vpc> predicate) throws IOException, InterruptedException;
+
+	/**
+	 * Looks up a VPC by its ID.
+	 *
+	 * @param id the ID of the VPC
+	 * @return null if no match is found
+	 * @throws NullPointerException     if {@code id} is null
+	 * @throws IllegalArgumentException if {@code id} is not a valid UUID per RFC 9562
+	 * @throws IllegalStateException    if the client is closed
+	 * @throws IOException              if an I/O error occurs. These errors are typically transient, and
+	 *                                  retrying the request may resolve the issue.
+	 * @throws InterruptedException     if the thread is interrupted while waiting for a response. This can
+	 *                                  happen due to shutdown signals.
+	 */
+	Vpc getVpc(VpcId id) throws IOException, InterruptedException;
 }

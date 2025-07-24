@@ -1,8 +1,8 @@
 package io.github.cowwoc.digitalocean.project.internal.resource;
 
-import io.github.cowwoc.digitalocean.compute.client.ComputeClient;
+import io.github.cowwoc.digitalocean.core.id.ProjectId;
+import io.github.cowwoc.digitalocean.core.id.RegionId;
 import io.github.cowwoc.digitalocean.core.internal.util.ToStringBuilder;
-import io.github.cowwoc.digitalocean.network.resource.Region;
 import io.github.cowwoc.digitalocean.project.internal.client.DefaultProjectClient;
 import io.github.cowwoc.digitalocean.project.resource.Project;
 
@@ -15,7 +15,7 @@ import static io.github.cowwoc.requirements12.java.DefaultJavaValidators.require
 public final class DefaultProject implements Project
 {
 	private final DefaultProjectClient client;
-	private final Id id;
+	private final ProjectId id;
 	private final String name;
 	private final String ownerUuid;
 	private final int ownerId;
@@ -43,9 +43,9 @@ public final class DefaultProject implements Project
 	 * @throws NullPointerException     if any of the arguments are null
 	 * @throws IllegalArgumentException if {@code ownerUuid}, {@code name} or {@code purpose} contain leading or
 	 *                                  trailing whitespace or are empty
-	 * @see ComputeClient#getDefaultVpc(Region.Id)
+	 * @see NetworkClient#getDefaultVpcId(RegionId)
 	 */
-	public DefaultProject(DefaultProjectClient client, Id id, String ownerUuid, int ownerId, String name,
+	public DefaultProject(DefaultProjectClient client, ProjectId id, String ownerUuid, int ownerId, String name,
 		String description, String purpose, Environment environment, boolean isDefault, Instant createdAt,
 		Instant updatedAt)
 	{
@@ -72,7 +72,7 @@ public final class DefaultProject implements Project
 	}
 
 	@Override
-	public Id getId()
+	public ProjectId getId()
 	{
 		return id;
 	}

@@ -1,7 +1,7 @@
 package io.github.cowwoc.digitalocean.registry.resource;
 
 import io.github.cowwoc.digitalocean.core.exception.AccessDeniedException;
-import io.github.cowwoc.digitalocean.core.id.IntegerId;
+import io.github.cowwoc.digitalocean.core.id.ContainerImageId;
 
 import java.io.IOException;
 import java.util.List;
@@ -14,18 +14,6 @@ import java.util.function.Predicate;
  */
 public interface Repository
 {
-	/**
-	 * Creates a new ID.
-	 *
-	 * @param value the server-side identifier for this resource
-	 * @return the ID
-	 * @throws IllegalArgumentException if {@code value} contains whitespace or is empty
-	 */
-	static Id id(int value)
-	{
-		return new Id(value);
-	}
-
 	/**
 	 * Returns the registry that the repository is in.
 	 *
@@ -88,7 +76,7 @@ public interface Repository
 	 *                               due to shutdown signals.
 	 * @throws AccessDeniedException if the client does not have sufficient privileges to execute this request
 	 */
-	void destroyImage(ContainerImage.Id imageId) throws IOException, InterruptedException;
+	void destroyImage(ContainerImageId imageId) throws IOException, InterruptedException;
 
 	/**
 	 * Deletes all dangling (untagged) images in the registry.
@@ -100,18 +88,4 @@ public interface Repository
 	 *                               due to shutdown signals.
 	 */
 	void deleteDanglingImages() throws IOException, InterruptedException;
-
-	/**
-	 * A repository ID.
-	 */
-	final class Id extends IntegerId
-	{
-		/**
-		 * @param value a server-side identifier
-		 */
-		private Id(int value)
-		{
-			super(value);
-		}
-	}
 }

@@ -4,22 +4,22 @@ import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.cowwoc.digitalocean.compute.internal.client.DefaultComputeClient;
+import io.github.cowwoc.digitalocean.compute.internal.parser.ComputeParser;
 import io.github.cowwoc.digitalocean.compute.resource.Droplet;
 import io.github.cowwoc.digitalocean.compute.resource.DropletCreator;
 import io.github.cowwoc.digitalocean.compute.resource.DropletFeature;
-import io.github.cowwoc.digitalocean.compute.resource.DropletImage;
-import io.github.cowwoc.digitalocean.compute.resource.DropletType;
 import io.github.cowwoc.digitalocean.compute.resource.SshPublicKey;
+import io.github.cowwoc.digitalocean.core.id.ComputeDropletTypeId;
+import io.github.cowwoc.digitalocean.core.id.DropletImageId;
+import io.github.cowwoc.digitalocean.core.id.RegionId;
+import io.github.cowwoc.digitalocean.core.id.VpcId;
+import io.github.cowwoc.digitalocean.core.internal.parser.CoreParser;
 import io.github.cowwoc.digitalocean.core.internal.util.Strings;
 import io.github.cowwoc.digitalocean.core.internal.util.ToStringBuilder;
-import io.github.cowwoc.digitalocean.network.internal.resource.NetworkParser;
-import io.github.cowwoc.digitalocean.network.resource.Region;
-import io.github.cowwoc.digitalocean.network.resource.Vpc;
 import org.eclipse.jetty.client.Request;
 import org.eclipse.jetty.client.Response;
 
 import java.io.IOException;
-import java.nio.file.AccessDeniedException;
 import java.time.OffsetTime;
 import java.time.ZoneOffset;
 import java.util.Collection;
@@ -38,13 +38,13 @@ public final class DefaultDropletCreator implements DropletCreator
 {
 	private final DefaultComputeClient client;
 	private final String name;
-	private final DropletType.Id typeId;
-	private final DropletImage.Id imageId;
-	private Region.Id regionId;
+	private final ComputeDropletTypeId typeId;
+	private final DropletImageId imageId;
+	private RegionId regionId;
 	private final Set<SshPublicKey> sshKeys = new LinkedHashSet<>();
 	private final Set<DropletFeature> features = EnumSet.of(MONITORING, PRIVATE_NETWORKING);
 	private final Set<String> tags = new LinkedHashSet<>();
-	private Vpc.Id vpcId;
+	private VpcId vpcId;
 	private String userData = "";
 	private BackupSchedule backupSchedule;
 	//	private Set<Volume> volumes;
@@ -69,8 +69,8 @@ public final class DefaultDropletCreator implements DropletCreator
 	 *                                    are empty.</li>
 	 *                                  </ul>
 	 */
-	public DefaultDropletCreator(DefaultComputeClient client, String name, DropletType.Id typeId,
-		DropletImage.Id imageId)
+	public DefaultDropletCreator(DefaultComputeClient client, String name, ComputeDropletTypeId typeId,
+		DropletImageId imageId)
 	{
 		requireThat(client, "client").isNotNull();
 		// Taken from https://docs.digitalocean.com/reference/api/digitalocean/#tag/Droplets/operation/droplets_create
@@ -84,14 +84,14 @@ public final class DefaultDropletCreator implements DropletCreator
 	}
 
 	@Override
-	public DropletCreator vpcId(Vpc.Id vpcId)
+	public DropletCreator vpcId(VpcId vpcId)
 	{
 		this.vpcId = vpcId;
 		return this;
 	}
 
 	@Override
-	public DropletCreator regionId(Region.Id region)
+	public DropletCreator regionId(RegionId region)
 	{
 		requireThat(region, "region").isNotNull();
 		this.regionId = region;
@@ -143,7 +143,6 @@ public final class DefaultDropletCreator implements DropletCreator
 	public DropletCreator tags(Collection<String> tags)
 	{
 		requireThat(tags, "tags").isNotNull().doesNotContain(null);
-		this.tags.clear();
 		for (String tag : tags)
 		{
 			requireThat(tag, "tag").withContext(tags, "tags").matches("^[a-zA-Z0-9_\\-:]+$").
@@ -169,7 +168,7 @@ public final class DefaultDropletCreator implements DropletCreator
 	}
 
 	@Override
-	public Droplet apply() throws AccessDeniedException, IOException, InterruptedException
+	public Droplet apply() throws IOException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/digitalocean/#tag/Droplets/operation/droplets_create
 		JsonMapper jm = client.getJsonMapper();
@@ -177,9 +176,9 @@ public final class DefaultDropletCreator implements DropletCreator
 			put("name", name).
 			put("size", typeId.toString()).
 			put("image", imageId.getValue());
-		NetworkParser networkParser = client.getNetworkParser();
+		CoreParser coreParser = client.getCoreParser();
 		if (regionId != null)
-			requestBody.put("region", networkParser.regionIdToServer(regionId));
+			requestBody.put("region", coreParser.regionIdToServer(regionId));
 		if (!sshKeys.isEmpty())
 		{
 			ArrayNode sshKeysNode = requestBody.putArray("ssh_keys");
@@ -193,10 +192,10 @@ public final class DefaultDropletCreator implements DropletCreator
 		}
 		if (vpcId != null)
 			requestBody.put("vpc_uuid", vpcId.getValue());
-		ComputeParser parser = client.getComputeParser();
+		ComputeParser computeParser = client.getComputeParser();
 		for (DropletFeature feature : features)
 		{
-			String name = parser.dropletFeatureToServer(feature);
+			String name = computeParser.dropletFeatureToServer(feature);
 			requestBody.put(name, true);
 		}
 		if (!tags.isEmpty())
@@ -213,7 +212,7 @@ public final class DefaultDropletCreator implements DropletCreator
 		Request request = client.createRequest(REST_SERVER.resolve("v2/droplets"), requestBody).
 			method(POST);
 		Response serverResponse = client.send(request);
-		return parser.createDroplet(typeId, imageId, request, serverResponse);
+		return computeParser.createDroplet(typeId, imageId, request, serverResponse);
 	}
 
 	/**
@@ -228,81 +227,10 @@ public final class DefaultDropletCreator implements DropletCreator
 		OffsetTime hourAtUtc = schedule.hour().withOffsetSameInstant(ZoneOffset.UTC);
 		json.put("hour", Strings.HOUR_MINUTE_SECOND.format(hourAtUtc));
 		json.put("day", schedule.day().name().toLowerCase(Locale.ROOT));
-		json.put("plan", getBackupFrequencyAsJson(schedule.frequency()));
+		ComputeParser computeParser = client.getComputeParser();
+		json.put("plan", computeParser.backupFrequencyToServer(schedule.frequency()));
 		return json;
 	}
-
-	/**
-	 * Returns the JSON representation of a BackupFrequency.
-	 *
-	 * @return the JSON representation
-	 */
-	public String getBackupFrequencyAsJson(BackupFrequency frequency)
-	{
-		return frequency.name().toLowerCase(Locale.ROOT);
-	}
-
-	/**
-	 * Returns the JSON representation of a DropletFeature.
-	 *
-	 * @return the JSON representation
-	 */
-	public String getBackupFrequencyAsJson(DropletFeature feature)
-	{
-		return feature.name().toLowerCase(Locale.ROOT);
-	}
-
-//	/**
-//	 * Updates a digest based on the requested droplet state.
-//	 *
-//	 * @param md a digest representing the state of the droplet after its creation and environment
-//	 *           configuration. This typically includes scripts or configurations that will be executed on the
-//	 *           droplet to set up its environment.<p>
-//	 *           <b>Note</b>: Only include key properties that determine the final state of the
-//	 *           droplet. Avoid including transient or dynamic values, such as temporary passwords that change
-//	 *           on each run, to ensure the digest remains consistent and reflective of the intended droplet
-//	 *           configuration.</p>
-//	 * @throws NullPointerException if {@code md} is null
-//	 */
-//	public void updateDigest(MessageDigest md)
-//	{
-//		md.update(name.getBytes(UTF_8));
-//
-//		ByteBuffer intToBytes = ByteBuffer.allocate(4);
-//		md.update(intToBytes.putInt(type.ordinal()).array());
-//
-//		intToBytes.clear();
-//		md.update(intToBytes.putInt(region.ordinal()).array());
-//
-//		intToBytes.clear();
-//		md.update(intToBytes.putInt(image.getId()).array());
-//
-//		for (Object sshKey : sshKeys)
-//			md.update(sshKey.toString().getBytes(UTF_8));
-//		for (DropletFeature feature : features)
-//		{
-//			intToBytes.clear();
-//			md.update(intToBytes.putInt(feature.ordinal()).array());
-//		}
-//		for (String tag : tags)
-//			md.update(tag.getBytes(UTF_8));
-//		md.update(vpc.getId().getBytes(UTF_8));
-//		md.update(userData.getBytes(UTF_8));
-//	}
-//
-//	/**
-//	 * Returns a String representation of a {@code MessageDigest} that can be set as a droplet tag.
-//	 *
-//	 * @param md a digest
-//	 * @return the base64 encoded digest of the droplet state
-//	 * @throws NullPointerException if {@code md} is null
-//	 */
-//	public String asTag(MessageDigest md)
-//	{
-//		// Use URL-safe encoding without padding to ensure compatibility with DigitalOcean's supported characters
-//		return md.getAlgorithm() + ":" + Base64.getUrlEncoder().withoutPadding().
-//			encodeToString(md.digest());
-//	}
 
 	@Override
 	public String toString()

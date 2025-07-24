@@ -7,6 +7,9 @@ import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.github.cowwoc.digitalocean.core.client.Client;
 import io.github.cowwoc.digitalocean.core.exception.TooManyRequestsException;
+import io.github.cowwoc.digitalocean.core.id.RegionId;
+import io.github.cowwoc.digitalocean.core.id.VpcId;
+import io.github.cowwoc.digitalocean.core.internal.parser.CoreParser;
 import io.github.cowwoc.digitalocean.core.internal.parser.JsonToObject;
 import io.github.cowwoc.digitalocean.core.internal.util.Exceptions;
 import io.github.cowwoc.pouch.core.WrappedCheckedException;
@@ -47,6 +50,7 @@ import java.util.concurrent.TimeoutException;
 import static io.github.cowwoc.requirements12.java.DefaultJavaValidators.requireThat;
 import static org.eclipse.jetty.http.HttpMethod.DELETE;
 import static org.eclipse.jetty.http.HttpMethod.GET;
+import static org.eclipse.jetty.http.HttpStatus.NOT_FOUND_404;
 import static org.eclipse.jetty.http.HttpStatus.NO_CONTENT_204;
 import static org.eclipse.jetty.http.HttpStatus.OK_200;
 
@@ -101,6 +105,8 @@ public abstract class AbstractInternalClient implements InternalClient
 		addModule(new JavaTimeModule()).
 		disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS).
 		build();
+	@SuppressWarnings("this-escape")
+	private final CoreParser coreParser = new CoreParser(this);
 	protected String accessToken;
 	/**
 	 * Indicates that the client has shut down.
@@ -304,9 +310,17 @@ public abstract class AbstractInternalClient implements InternalClient
 		Request request = createRequest(uri).
 			method(DELETE);
 		Response serverResponse = send(request);
-		if (serverResponse.getStatus() != NO_CONTENT_204)
+		switch (serverResponse.getStatus())
 		{
-			throw new AssertionError("Unexpected response: " + toString(serverResponse) + "\n" +
+			case NO_CONTENT_204 ->
+			{
+				// The resource was deleted
+			}
+			case NOT_FOUND_404 ->
+			{
+				// The resource was already deleted
+			}
+			default -> throw new AssertionError("Unexpected response: " + toString(serverResponse) + "\n" +
 				"Request: " + toString(request));
 		}
 	}
@@ -519,5 +533,26 @@ public abstract class AbstractInternalClient implements InternalClient
 			return;
 		httpClient.close();
 		closed = true;
+	}
+
+	@Override
+	public VpcId getDefaultVpcId(RegionId regionId) throws IOException, InterruptedException
+	{
+		requireThat(regionId, "regionId").isNotNull();
+
+		// https://docs.digitalocean.com/reference/api/digitalocean/#tag/VPCs/operation/vpcs_list
+		return getElement(REST_SERVER.resolve("v2/vpcs"), Map.of(), body ->
+		{
+			for (JsonNode vpc : body.get("vpcs"))
+			{
+				boolean isDefault = coreParser.getBoolean(vpc, "default");
+				if (!isDefault)
+					continue;
+				RegionId actualRegion = coreParser.regionIdFromServer(vpc.get("region"));
+				if (actualRegion.equals(regionId))
+					return coreParser.vpcIdFromServer(vpc.get("id"));
+			}
+			return null;
+		});
 	}
 }

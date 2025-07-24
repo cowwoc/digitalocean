@@ -2,6 +2,7 @@ package io.github.cowwoc.digitalocean.test.util;
 
 import java.lang.StackWalker.Option;
 import java.lang.StackWalker.StackFrame;
+import java.util.Locale;
 
 /**
  * Test helper functions.
@@ -18,9 +19,10 @@ public final class Tests
 	{
 		// https://stackoverflow.com/a/52335318/14731
 		StackFrame caller = StackWalker.getInstance(Option.RETAIN_CLASS_REFERENCE).
-			walk(frame -> frame.skip(2).findFirst().
+			walk(frame -> frame.skip(1).findFirst().
 				orElseThrow());
-		return caller.getDeclaringClass().getSimpleName() + "." + caller.getMethodName();
+		return (caller.getDeclaringClass().getSimpleName() + "-" + caller.getMethodName()).
+			toLowerCase(Locale.ROOT);
 	}
 
 	private Tests()

@@ -1,12 +1,11 @@
 package io.github.cowwoc.digitalocean.kubernetes.resource;
 
-import io.github.cowwoc.digitalocean.compute.client.ComputeClient;
-import io.github.cowwoc.digitalocean.compute.resource.DropletType;
+import io.github.cowwoc.digitalocean.core.id.ComputeDropletTypeId;
+import io.github.cowwoc.digitalocean.core.id.RegionId;
+import io.github.cowwoc.digitalocean.core.id.VpcId;
 import io.github.cowwoc.digitalocean.core.util.CreateResult;
 import io.github.cowwoc.digitalocean.kubernetes.resource.Kubernetes.MaintenanceSchedule;
-import io.github.cowwoc.digitalocean.network.resource.Region;
-import io.github.cowwoc.digitalocean.network.resource.Region.Id;
-import io.github.cowwoc.digitalocean.network.resource.Vpc;
+import io.github.cowwoc.digitalocean.network.client.NetworkClient;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -29,7 +28,7 @@ public interface KubernetesCreator
 	 *
 	 * @return the region
 	 */
-	Region.Id region();
+	RegionId region();
 
 	/**
 	 * Returns the kubernetes software version to deploy.
@@ -77,18 +76,18 @@ public interface KubernetesCreator
 	/**
 	 * Returns the VPC that the cluster will use.
 	 *
-	 * @param vpc null to use the region's default VPC
+	 * @param vpc null to use the region's {@link NetworkClient#getDefaultVpcId(RegionId) default} VPC
 	 * @return this
-	 * @see ComputeClient#getDefaultVpc(Id)
+	 * @see NetworkClient#getDefaultVpcId(RegionId)
 	 */
-	KubernetesCreator vpc(Vpc.Id vpc);
+	KubernetesCreator vpc(VpcId vpc);
 
 	/**
 	 * Returns the VPC that the cluster will use.
 	 *
-	 * @return null if the region's default VPC will be used
+	 * @return null if the region's {@link NetworkClient#getDefaultVpcId(RegionId) default} VPC will be used
 	 */
-	Vpc.Id vpc();
+	VpcId vpc();
 
 	/**
 	 * Adds a tag to apply to the cluster.
@@ -101,7 +100,7 @@ public interface KubernetesCreator
 	KubernetesCreator tag(String tag);
 
 	/**
-	 * Sets the tags of the cluster.
+	 * Adds tags to the cluster.
 	 *
 	 * @param tags the tags
 	 * @return this
@@ -214,7 +213,7 @@ public interface KubernetesCreator
 	 * @throws InterruptedException     if the thread is interrupted while waiting for a response. This can
 	 *                                  happen due to shutdown signals.
 	 */
-	CreateResult<Kubernetes> create() throws IOException, InterruptedException;
+	CreateResult<Kubernetes> apply() throws IOException, InterruptedException;
 
 	/**
 	 * Copies unchangeable properties from an existing cluster into this configuration. Certain properties
@@ -235,7 +234,7 @@ public interface KubernetesCreator
 		 *
 		 * @return the type of droplets
 		 */
-		DropletType.Id dropletType();
+		ComputeDropletTypeId dropletType();
 
 		/**
 		 * Returns the name of the node pool.
@@ -262,7 +261,7 @@ public interface KubernetesCreator
 		NodePoolBuilder tag(String tag);
 
 		/**
-		 * Sets the tags of the node pool.
+		 * Adds tags to the node pool.
 		 *
 		 * @param tags the tags
 		 * @return this

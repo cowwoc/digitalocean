@@ -1,12 +1,15 @@
 package io.github.cowwoc.digitalocean.database.resource;
 
-import io.github.cowwoc.digitalocean.compute.resource.DropletType;
 import io.github.cowwoc.digitalocean.core.exception.ResourceNotFoundException;
-import io.github.cowwoc.digitalocean.core.id.StringId;
+import io.github.cowwoc.digitalocean.core.id.DatabaseDropletTypeId;
+import io.github.cowwoc.digitalocean.core.id.DatabaseId;
+import io.github.cowwoc.digitalocean.core.id.DatabaseTypeId;
+import io.github.cowwoc.digitalocean.core.id.ProjectId;
+import io.github.cowwoc.digitalocean.core.id.RegionId;
+import io.github.cowwoc.digitalocean.core.id.VpcId;
 import io.github.cowwoc.digitalocean.core.internal.util.Strings;
 import io.github.cowwoc.digitalocean.core.internal.util.ToStringBuilder;
-import io.github.cowwoc.digitalocean.network.resource.Region;
-import io.github.cowwoc.digitalocean.network.resource.Vpc;
+import io.github.cowwoc.digitalocean.network.client.NetworkClient;
 import io.github.cowwoc.requirements12.annotation.CheckReturnValue;
 
 import java.io.IOException;
@@ -28,25 +31,11 @@ import static io.github.cowwoc.requirements12.java.DefaultJavaValidators.require
 public interface Database
 {
 	/**
-	 * Creates a new ID.
-	 *
-	 * @param value the server-side identifier
-	 * @return the type-safe identifier for the resource
-	 * @throws IllegalArgumentException if {@code value} contains whitespace or is empty
-	 */
-	static Id id(String value)
-	{
-		if (value == null)
-			return null;
-		return new Id(value);
-	}
-
-	/**
 	 * Returns the ID of the cluster.
 	 *
 	 * @return the ID
 	 */
-	Id getId();
+	DatabaseId getId();
 
 	/**
 	 * Returns the name of the cluster.
@@ -60,7 +49,7 @@ public interface Database
 	 *
 	 * @return the type
 	 */
-	DatabaseType.Id getDatabaseTypeId();
+	DatabaseTypeId getDatabaseTypeId();
 
 	/**
 	 * Returns the version number of the database software.
@@ -77,26 +66,25 @@ public interface Database
 	String getSemanticVersion();
 
 	/**
-	 * Returns the number of standby nodes in the cluster. The cluster includes one primary node, and may
-	 * include one or two standby nodes.
+	 * Returns the number of nodes in the cluster.
 	 *
-	 * @return the number of standby nodes
+	 * @return the number of nodes
 	 */
-	int getNumberOfStandbyNodes();
+	int getNumberOfNodes();
 
 	/**
 	 * Returns the machine type of the nodes.
 	 *
 	 * @return the machine type
 	 */
-	DropletType.Id getDropletType();
+	DatabaseDropletTypeId getDropletTypeId();
 
 	/**
 	 * Returns the region that the cluster is deployed in.
 	 *
 	 * @return the region
 	 */
-	Region.Id getRegion();
+	RegionId getRegionId();
 
 	/**
 	 * Returns the status of the cluster.
@@ -108,9 +96,10 @@ public interface Database
 	/**
 	 * Returns the VPC that the cluster is deployed in.
 	 *
-	 * @return {@code null} if it is deployed into the default VPC of the region
+	 * @return {@code null} if it is deployed into the {@link NetworkClient#getDefaultVpcId(RegionId) default}
+	 * 	VPC of the region
 	 */
-	Vpc.Id getVpc();
+	VpcId getVpcId();
 
 	/**
 	 * Returns the cluster's tags.
@@ -198,7 +187,7 @@ public interface Database
 	 *
 	 * @return the ID of the project
 	 */
-	String getProjectId();
+	ProjectId getProjectId();
 
 	/**
 	 * Returns the cluster's firewall rules.
@@ -290,7 +279,7 @@ public interface Database
 	void waitForDestroy(Duration timeout) throws IOException, InterruptedException, TimeoutException;
 
 	/**
-	 * Destroys the cluster.
+	 * Destroys the cluster. If the cluster does not exist, this method does nothing.
 	 *
 	 * @throws IllegalStateException if the client is closed
 	 * @throws IOException           if an I/O error occurs. These errors are typically transient, and retrying
@@ -299,25 +288,6 @@ public interface Database
 	 *                               due to shutdown signals.
 	 */
 	void destroy() throws IOException, InterruptedException;
-
-	/**
-	 * A type-safe identifier for this type of resource.
-	 * <p>
-	 * This adds type-safety to API methods by ensuring that IDs specific to one class cannot be used in place
-	 * of IDs belonging to another class.
-	 */
-	final class Id extends StringId
-	{
-		/**
-		 * @param value a server-side identifier
-		 * @throws NullPointerException     if {@code value} is null
-		 * @throws IllegalArgumentException if {@code value} contains whitespace or is empty
-		 */
-		private Id(String value)
-		{
-			super(value);
-		}
-	}
 
 	/**
 	 * The schedule for when maintenance activities may be performed on the cluster.

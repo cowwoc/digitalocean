@@ -1,8 +1,9 @@
 package io.github.cowwoc.digitalocean.compute.internal.resource;
 
 import io.github.cowwoc.digitalocean.compute.internal.util.Numbers;
-import io.github.cowwoc.digitalocean.compute.resource.ComputeRegion;
-import io.github.cowwoc.digitalocean.compute.resource.DropletType;
+import io.github.cowwoc.digitalocean.compute.resource.ComputeDropletType;
+import io.github.cowwoc.digitalocean.core.id.ComputeDropletTypeId;
+import io.github.cowwoc.digitalocean.core.id.RegionId;
 import io.github.cowwoc.digitalocean.core.internal.util.ToStringBuilder;
 
 import java.math.BigDecimal;
@@ -10,16 +11,16 @@ import java.util.Set;
 
 import static io.github.cowwoc.requirements12.java.DefaultJavaValidators.requireThat;
 
-public final class DefaultDropletType implements DropletType
+public final class DefaultComputeDropletType implements ComputeDropletType
 {
-	private final Id id;
+	private final ComputeDropletTypeId id;
 	private final int ramInMiB;
 	private final int cpus;
 	private final int diskInGiB;
 	private final BigDecimal transferInGiB;
 	private final BigDecimal costPerHour;
 	private final BigDecimal costPerMonth;
-	private final Set<ComputeRegion.Id> regionIds;
+	private final Set<RegionId> regionIds;
 	private final boolean available;
 	private final String description;
 	private final Set<DiskConfiguration> diskConfiguration;
@@ -48,20 +49,28 @@ public final class DefaultDropletType implements DropletType
 	 * @param diskConfiguration describes the disks available to this type
 	 * @param gpuConfiguration  (optional) describes the GPU available to this type, or {@code null} if absent
 	 * @throws NullPointerException     if any of the mandatory arguments are null
-	 * @throws IllegalArgumentException if {@code description} contains leading or trailing whitespace or is
-	 *                                  empty
+	 * @throws IllegalArgumentException if:
+	 *                                  <ul>
+	 *                                    <li>{@code ramInMiB}, {@code vCpus} or {@code diskInGiB} are negative
+	 *                                    or zero.</li>
+	 *                                    <li>{@code transferInGiB}, {@code costPerHour} or
+	 *                                    {@code costPerMonth} are negative.</li>
+	 *                                    <li>{@code description} contains leading or trailing whitespace or
+	 *                                    is empty.</li>
+	 *                                  </ul>
 	 */
-	public DefaultDropletType(Id id, int ramInMiB, int cpus, int diskInGiB, BigDecimal transferInGiB,
-		BigDecimal costPerHour, BigDecimal costPerMonth, Set<ComputeRegion.Id> regionIds, boolean available,
+	public DefaultComputeDropletType(ComputeDropletTypeId id, int ramInMiB, int cpus, int diskInGiB,
+		BigDecimal transferInGiB,
+		BigDecimal costPerHour, BigDecimal costPerMonth, Set<RegionId> regionIds, boolean available,
 		String description, Set<DiskConfiguration> diskConfiguration, GpuConfiguration gpuConfiguration)
 	{
 		requireThat(id, "id").isNotNull();
 		requireThat(ramInMiB, "ramInMiB").isPositive();
 		requireThat(cpus, "vCpus").isPositive();
 		requireThat(diskInGiB, "diskInGiB").isPositive();
-		requireThat(transferInGiB, "transferInGiB").isPositive();
-		requireThat(costPerHour, "costPerHour").isPositive();
-		requireThat(costPerMonth, "costPerMonth").isPositive();
+		requireThat(transferInGiB, "transferInGiB").isNotNegative();
+		requireThat(costPerHour, "costPerHour").isNotNegative();
+		requireThat(costPerMonth, "costPerMonth").isNotNegative();
 		requireThat(regionIds, "regionIds").isNotNull();
 		requireThat(description, "description").isStripped().isNotEmpty();
 		requireThat(diskConfiguration, "diskConfiguration").isNotNull();
@@ -80,7 +89,7 @@ public final class DefaultDropletType implements DropletType
 	}
 
 	@Override
-	public Id getId()
+	public ComputeDropletTypeId getId()
 	{
 		return id;
 	}
@@ -104,6 +113,12 @@ public final class DefaultDropletType implements DropletType
 	}
 
 	@Override
+	public boolean isContracted()
+	{
+		return regionIds.isEmpty();
+	}
+
+	@Override
 	public BigDecimal getTransferInGiB()
 	{
 		return transferInGiB;
@@ -122,7 +137,7 @@ public final class DefaultDropletType implements DropletType
 	}
 
 	@Override
-	public Set<ComputeRegion.Id> getRegionIds()
+	public Set<RegionId> getRegionIds()
 	{
 		return regionIds;
 	}
@@ -160,13 +175,13 @@ public final class DefaultDropletType implements DropletType
 	@Override
 	public boolean equals(Object o)
 	{
-		return o instanceof DropletType other && other.getId().equals(id);
+		return o instanceof ComputeDropletType other && other.getId().equals(id);
 	}
 
 	@Override
 	public String toString()
 	{
-		return new ToStringBuilder(DefaultDropletType.class).
+		return new ToStringBuilder(DefaultComputeDropletType.class).
 			add("id", id).
 			add("ramInMiB", ramInMiB).
 			add("cpus", cpus).

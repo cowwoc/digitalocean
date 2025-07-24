@@ -25,5 +25,8 @@ module io.github.cowwoc.digitalocean.core
 		io.github.cowwoc.digitalocean.compute, io.github.cowwoc.digitalocean.database,
 		io.github.cowwoc.digitalocean.registry, io.github.cowwoc.digitalocean.kubernetes,
 		io.github.cowwoc.digitalocean.network, io.github.cowwoc.digitalocean.project;
-	exports io.github.cowwoc.digitalocean.core.internal.util;
+	exports io.github.cowwoc.digitalocean.core.internal.util to
+		io.github.cowwoc.digitalocean.compute, io.github.cowwoc.digitalocean.database,
+		io.github.cowwoc.digitalocean.registry, io.github.cowwoc.digitalocean.kubernetes,
+		io.github.cowwoc.digitalocean.network, io.github.cowwoc.digitalocean.project, io.github.cowwoc.digitalocean.test;
 }

@@ -3,15 +3,17 @@ package io.github.cowwoc.digitalocean.compute.internal.resource;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.github.cowwoc.digitalocean.compute.client.ComputeClient;
 import io.github.cowwoc.digitalocean.compute.internal.client.DefaultComputeClient;
+import io.github.cowwoc.digitalocean.compute.internal.parser.ComputeParser;
 import io.github.cowwoc.digitalocean.compute.resource.Droplet;
 import io.github.cowwoc.digitalocean.compute.resource.DropletFeature;
 import io.github.cowwoc.digitalocean.compute.resource.DropletImage;
-import io.github.cowwoc.digitalocean.compute.resource.DropletType;
+import io.github.cowwoc.digitalocean.core.id.ComputeDropletTypeId;
+import io.github.cowwoc.digitalocean.core.id.DropletId;
+import io.github.cowwoc.digitalocean.core.id.RegionId;
+import io.github.cowwoc.digitalocean.core.id.VpcId;
 import io.github.cowwoc.digitalocean.core.internal.util.ToStringBuilder;
-import io.github.cowwoc.digitalocean.network.resource.Region;
-import io.github.cowwoc.digitalocean.network.resource.Vpc;
+import io.github.cowwoc.digitalocean.network.client.NetworkClient;
 import io.github.cowwoc.requirements12.annotation.CheckReturnValue;
 import org.eclipse.jetty.client.ContentResponse;
 import org.eclipse.jetty.client.Request;
@@ -31,12 +33,12 @@ import static org.eclipse.jetty.http.HttpStatus.CREATED_201;
 public final class DefaultDroplet implements Droplet
 {
 	private final DefaultComputeClient client;
-	private final Id id;
+	private final DropletId id;
 	private final String name;
-	private final DropletType.Id typeId;
+	private final ComputeDropletTypeId typeId;
 	private final DropletImage image;
-	private final Region.Id regionId;
-	private final Vpc.Id vpcId;
+	private final RegionId regionId;
+	private final VpcId vpcId;
 	private final Set<InetAddress> addresses;
 	private final Set<DropletFeature> features;
 	private final Set<String> tags;
@@ -60,10 +62,10 @@ public final class DefaultDroplet implements Droplet
 	 * @throws NullPointerException     if any of the arguments are null
 	 * @throws IllegalArgumentException if any of the arguments contain leading or trailing whitespace or are
 	 *                                  empty
-	 * @see ComputeClient#getDefaultVpc(Region.Id)
+	 * @see NetworkClient#getDefaultVpcId(RegionId)
 	 */
-	public DefaultDroplet(DefaultComputeClient client, Id id, String name, DropletType.Id typeId,
-		DropletImage image, Region.Id regionId, Vpc.Id vpcId, Set<InetAddress> addresses,
+	public DefaultDroplet(DefaultComputeClient client, DropletId id, String name, ComputeDropletTypeId typeId,
+		DropletImage image, RegionId regionId, VpcId vpcId, Set<InetAddress> addresses,
 		Set<DropletFeature> features, Set<String> tags, Instant createdAt)
 	{
 		requireThat(client, "client").isNotNull();
@@ -99,7 +101,7 @@ public final class DefaultDroplet implements Droplet
 	}
 
 	@Override
-	public DropletType.Id getTypeId()
+	public ComputeDropletTypeId getTypeId()
 	{
 		return typeId;
 	}
@@ -111,13 +113,13 @@ public final class DefaultDroplet implements Droplet
 	}
 
 	@Override
-	public Region.Id getRegionId()
+	public RegionId getRegionId()
 	{
 		return regionId;
 	}
 
 	@Override
-	public Vpc.Id getVpcId()
+	public VpcId getVpcId()
 	{
 		return vpcId;
 	}

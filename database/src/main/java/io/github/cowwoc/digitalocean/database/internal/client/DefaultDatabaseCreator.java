@@ -4,17 +4,21 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.github.cowwoc.digitalocean.compute.resource.DropletType;
 import io.github.cowwoc.digitalocean.core.exception.AccessDeniedException;
+import io.github.cowwoc.digitalocean.core.exception.PendingDeletionException;
+import io.github.cowwoc.digitalocean.core.exception.UnsupportedCombinationException;
+import io.github.cowwoc.digitalocean.core.id.DatabaseDropletTypeId;
+import io.github.cowwoc.digitalocean.core.id.DatabaseTypeId;
+import io.github.cowwoc.digitalocean.core.id.ProjectId;
+import io.github.cowwoc.digitalocean.core.id.RegionId;
+import io.github.cowwoc.digitalocean.core.id.VpcId;
+import io.github.cowwoc.digitalocean.core.internal.parser.CoreParser;
+import io.github.cowwoc.digitalocean.core.internal.util.ParameterValidator;
 import io.github.cowwoc.digitalocean.core.internal.util.ToStringBuilder;
 import io.github.cowwoc.digitalocean.core.util.CreateResult;
 import io.github.cowwoc.digitalocean.database.client.DatabaseClient;
 import io.github.cowwoc.digitalocean.database.resource.Database;
 import io.github.cowwoc.digitalocean.database.resource.DatabaseCreator;
-import io.github.cowwoc.digitalocean.database.resource.DatabaseType;
-import io.github.cowwoc.digitalocean.network.internal.resource.NetworkParser;
-import io.github.cowwoc.digitalocean.network.resource.Region;
-import io.github.cowwoc.digitalocean.network.resource.Vpc;
 import org.eclipse.jetty.client.ContentResponse;
 import org.eclipse.jetty.client.Request;
 import org.eclipse.jetty.client.Response;
@@ -28,6 +32,7 @@ import static io.github.cowwoc.digitalocean.core.internal.client.AbstractInterna
 import static io.github.cowwoc.requirements12.java.DefaultJavaValidators.requireThat;
 import static org.eclipse.jetty.http.HttpMethod.POST;
 import static org.eclipse.jetty.http.HttpStatus.CREATED_201;
+import static org.eclipse.jetty.http.HttpStatus.PRECONDITION_FAILED_412;
 import static org.eclipse.jetty.http.HttpStatus.UNAUTHORIZED_401;
 import static org.eclipse.jetty.http.HttpStatus.UNPROCESSABLE_ENTITY_422;
 
@@ -35,52 +40,55 @@ public final class DefaultDatabaseCreator implements DatabaseCreator
 {
 	private final DefaultDatabaseClient client;
 	private final String name;
-	private final DatabaseType databaseType;
-	private String version;
-	private final int numberOfStandbyNodes;
-	private final DropletType.Id dropletType;
-	private final Region.Id region;
-	private Vpc.Id vpc;
+	private final DatabaseTypeId databaseTypeId;
+	private final int numberOfNodes;
+	private final DatabaseDropletTypeId dropletTypeId;
+	private final RegionId regionId;
+	private String version = "";
+	private VpcId vpcId;
 	private final Set<String> tags = new HashSet<>();
-	private String projectId = "";
+	private ProjectId projectId;
 	private final Set<FirewallRuleBuilder> firewallRules = new HashSet<>();
-	private int additionalStorageInMiB;
+	private int additionalStorageInMiB = -1;
 	private RestoreFrom restoreFrom;
 
 	/**
 	 * Creates a DefaultDatabaseCreator.
 	 *
-	 * @param client               the client configuration
-	 * @param name                 the name of the cluster
-	 * @param databaseType         the type of the database
-	 * @param numberOfStandbyNodes the number of nodes in the cluster. The cluster includes one primary node,
-	 *                             and may include one or two standby nodes.
-	 * @param dropletType          the machine type of the droplet
-	 * @param region               the region to create the cluster in
+	 * @param client         the client configuration
+	 * @param name           the name of the cluster
+	 * @param databaseTypeId the type of the database
+	 * @param numberOfNodes  the number of nodes in the cluster
+	 * @param dropletTypeId  the machine type of the droplet
+	 * @param regionId       the region to create the cluster in
 	 * @throws NullPointerException     if any of the arguments are null
 	 * @throws IllegalArgumentException if:
 	 *                                  <ul>
-	 *                                    <li>{@code name} contains leading or trailing whitespace or is
-	 *                                    empty.</li>
-	 *                                    <li>{@code numberOfStandbyNodes} is negative, or greater than 2.</li>
+	 *                                    <li>{@code name} contains characters other than lowercase letters
+	 *                                    ({@code a-z}), digits ({@code 0-9}), and dashes ({@code -}).</li>
+	 *                                    <li>{@code name} begins or ends with a character other than a letter
+	 *                                    or digit.</li>
+	 *                                    <li>{@code name} is shorter than 3 characters or longer than 63
+	 *                                    characters.</li>
+	 *                                    <li>{@code numberOfNodes} is less than 1 or greater than 3.</li>
 	 *                                  </ul>
 	 * @throws IllegalStateException    if the client is closed
 	 */
-	public DefaultDatabaseCreator(DatabaseClient client, String name, DatabaseType databaseType,
-		int numberOfStandbyNodes, DropletType.Id dropletType, Region.Id region)
+	public DefaultDatabaseCreator(DatabaseClient client, String name, DatabaseTypeId databaseTypeId,
+		int numberOfNodes, DatabaseDropletTypeId dropletTypeId, RegionId regionId)
 	{
 		requireThat(client, "client").isNotNull();
-		requireThat(name, "name").isStripped().isNotEmpty();
-		requireThat(databaseType, "databaseType").isNotNull();
-		requireThat(numberOfStandbyNodes, "numberOfStandbyNodes").isBetween(0, true, 2, true);
-		requireThat(dropletType, "dropletType").isNotNull();
-		requireThat(region, "region").isNotNull();
+		ParameterValidator.validateName(name, "name");
+		requireThat(databaseTypeId, "databaseTypeId").isNotNull();
+		requireThat(numberOfNodes, "numberOfNodes").isBetween(1, true, 3, true);
+		requireThat(dropletTypeId, "dropletTypeId").isNotNull();
+		requireThat(regionId, "regionId").isNotNull();
 		this.client = (DefaultDatabaseClient) client;
 		this.name = name;
-		this.databaseType = databaseType;
-		this.numberOfStandbyNodes = numberOfStandbyNodes;
-		this.dropletType = dropletType;
-		this.region = region;
+		this.databaseTypeId = databaseTypeId;
+		this.numberOfNodes = numberOfNodes;
+		this.dropletTypeId = dropletTypeId;
+		this.regionId = regionId;
 	}
 
 	@Override
@@ -92,9 +100,9 @@ public final class DefaultDatabaseCreator implements DatabaseCreator
 	}
 
 	@Override
-	public DatabaseCreator vpc(Vpc.Id vpc)
+	public DatabaseCreator vpcId(VpcId vpcId)
 	{
-		this.vpc = vpc;
+		this.vpcId = vpcId;
 		return this;
 	}
 
@@ -112,7 +120,6 @@ public final class DefaultDatabaseCreator implements DatabaseCreator
 	public DatabaseCreator tags(Collection<String> tags)
 	{
 		requireThat(tags, "tags").isNotNull().doesNotContain(null);
-		this.tags.clear();
 		for (String tag : tags)
 		{
 			requireThat(tag, "tag").withContext(tags, "tags").matches("^[a-zA-Z0-9_\\-:]+$").
@@ -123,9 +130,9 @@ public final class DefaultDatabaseCreator implements DatabaseCreator
 	}
 
 	@Override
-	public DatabaseCreator projectId(String projectId)
+	public DatabaseCreator projectId(ProjectId projectId)
 	{
-		requireThat(projectId, "projectId").isStripped();
+		requireThat(projectId, "projectId").isNotNull();
 		this.projectId = projectId;
 		return this;
 	}
@@ -142,7 +149,6 @@ public final class DefaultDatabaseCreator implements DatabaseCreator
 	public DatabaseCreator firewallRules(Collection<FirewallRuleBuilder> firewallRules)
 	{
 		requireThat(firewallRules, "firewallRules").isNotNull().doesNotContain(null);
-		this.firewallRules.clear();
 		this.firewallRules.addAll(firewallRules);
 		return this;
 	}
@@ -162,40 +168,40 @@ public final class DefaultDatabaseCreator implements DatabaseCreator
 	}
 
 	@Override
-	public CreateResult<Database> apply() throws IOException, InterruptedException
+	public CreateResult<Database> apply() throws IOException, InterruptedException, UnsupportedCombinationException
 	{
 		// https://docs.digitalocean.com/reference/api/digitalocean/#tag/Databases/operation/databases_create_cluster
 		JsonMapper jm = client.getJsonMapper();
-		DatabaseParser parser = client.getDatabaseParser();
-		NetworkParser networkParser = client.getNetworkParser();
+		DatabaseParser databaseParser = client.getDatabaseParser();
+		CoreParser coreParser = client.getCoreParser();
 		ObjectNode requestBody = jm.createObjectNode().
 			put("name", name).
-			put("engine", parser.databaseTypeIdToServer(databaseType.id())).
-			put("num_nodes", numberOfStandbyNodes + 1).
-			put("size", dropletType.toString()).
-			put("region", networkParser.regionIdToServer(region));
+			put("engine", databaseParser.databaseTypeIdToServer(databaseTypeId)).
+			put("num_nodes", numberOfNodes).
+			put("size", dropletTypeId.toString()).
+			put("region", coreParser.regionIdToServer(regionId));
 		if (!version.isEmpty())
 			requestBody.put("version", version);
-		if (vpc != null)
-			requestBody.put("private_network_uuid", vpc.getValue());
+		if (vpcId != null)
+			requestBody.put("private_network_uuid", vpcId.getValue());
 		if (!tags.isEmpty())
 		{
 			ArrayNode tagsNode = requestBody.putArray("tags");
 			for (String tag : tags)
 				tagsNode.add(tag);
 		}
-		if (!projectId.isEmpty())
-			requestBody.put("project_id", projectId);
+		if (projectId != null)
+			requestBody.put("project_id", projectId.getValue());
 		if (!firewallRules.isEmpty())
 		{
 			ArrayNode firewallRulesNode = requestBody.putArray("rules");
 			for (FirewallRuleBuilder firewallRuleBuilder : firewallRules)
-				firewallRulesNode.add(parser.firewallRuleToServer(firewallRuleBuilder));
+				firewallRulesNode.add(databaseParser.firewallRuleToServer(firewallRuleBuilder));
 		}
-		if (additionalStorageInMiB > 0)
+		if (additionalStorageInMiB != -1)
 			requestBody.put("storage_size_mib", additionalStorageInMiB);
 		if (restoreFrom != null)
-			requestBody.set("backup_restore", parser.restoreFromToServer(restoreFrom));
+			requestBody.set("backup_restore", databaseParser.restoreFromToServer(restoreFrom));
 
 		Request request = client.createRequest(REST_SERVER.resolve("v2/databases"), requestBody).
 			method(POST);
@@ -206,7 +212,7 @@ public final class DefaultDatabaseCreator implements DatabaseCreator
 			{
 				ContentResponse contentResponse = (ContentResponse) serverResponse;
 				JsonNode body = client.getResponseBody(contentResponse);
-				yield CreateResult.created(parser.databaseFromServer(body.get("database")));
+				yield CreateResult.created(databaseParser.databaseFromServer(body.get("database")));
 			}
 			case UNAUTHORIZED_401 ->
 			{
@@ -214,22 +220,33 @@ public final class DefaultDatabaseCreator implements DatabaseCreator
 				JsonNode json = client.getResponseBody(contentResponse);
 				throw new AccessDeniedException(json.get("message").textValue());
 			}
+			case PRECONDITION_FAILED_412 ->
+			{
+				// Discovered empirically
+				ContentResponse contentResponse = (ContentResponse) serverResponse;
+				JsonNode json = client.getResponseBody(contentResponse);
+				String message = json.get("message").textValue();
+				if (message.equals("At this time, we're unable to create a cluster of that size in that region"))
+					throw new UnsupportedCombinationException(message);
+				throw new AssertionError("Unexpected response: " + client.toString(serverResponse) + "\n" +
+					"Request: " + client.toString(request));
+			}
 			case UNPROCESSABLE_ENTITY_422 ->
 			{
-				// Discovered empirically: not all droplet types are acceptable.
 				ContentResponse contentResponse = (ContentResponse) serverResponse;
 				JsonNode json = client.getResponseBody(contentResponse);
 				String message = json.get("message").textValue();
 				switch (message)
 				{
-					case "invalid size" -> throw new IllegalArgumentException("dropletType may not be " + dropletType);
+					case "invalid size" -> throw new IllegalArgumentException("dropletType may not be " +
+						dropletTypeId);
 					case "cluster name is not available" ->
 					{
-						Database conflict = client.getDatabaseCluster(cluster -> cluster.getName().equals(name));
+						Database conflict = client.getCluster(cluster -> cluster.getName().equals(name));
 						if (conflict != null)
 							yield CreateResult.conflictedWith(conflict);
-						throw new AssertionError("Unexpected response: " + client.toString(serverResponse) + "\n" +
-							"Request: " + client.toString(request));
+						throw new PendingDeletionException("A cluster with the same name is pending deletion. Its name " +
+							"cannot be reused until the operation completes, nor can the existing instance be returned.");
 					}
 					default -> throw new AssertionError("Unexpected response: " + client.toString(serverResponse) +
 						"\n" +
@@ -246,12 +263,12 @@ public final class DefaultDatabaseCreator implements DatabaseCreator
 	{
 		return new ToStringBuilder(DefaultDatabaseCreator.class).
 			add("name", name).
-			add("databaseType", databaseType).
+			add("databaseTypeId", databaseTypeId).
 			add("version", version).
-			add("numberOfStandbyNodes", numberOfStandbyNodes).
-			add("dropletType", dropletType).
-			add("region", region).
-			add("vpc", vpc).
+			add("numberOfNodes", numberOfNodes).
+			add("dropletType", dropletTypeId).
+			add("region", regionId).
+			add("vpc", vpcId).
 			add("tags", tags).
 			add("projectId", projectId).
 			add("firewallRules", firewallRules).

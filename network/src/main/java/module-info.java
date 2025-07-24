@@ -14,7 +14,13 @@ module io.github.cowwoc.digitalocean.network
 	exports io.github.cowwoc.digitalocean.network.client;
 	exports io.github.cowwoc.digitalocean.network.resource;
 
+	exports io.github.cowwoc.digitalocean.network.internal.client to
+		io.github.cowwoc.digitalocean.compute, io.github.cowwoc.digitalocean.database,
+		io.github.cowwoc.digitalocean.kubernetes;
 	exports io.github.cowwoc.digitalocean.network.internal.resource to
-		io.github.cowwoc.digitalocean.compute, io.github.cowwoc.digitalocean.kubernetes,
-		io.github.cowwoc.digitalocean.database;
+		io.github.cowwoc.digitalocean.compute, io.github.cowwoc.digitalocean.database,
+		io.github.cowwoc.digitalocean.kubernetes;
+	exports io.github.cowwoc.digitalocean.network.internal.parser to
+		io.github.cowwoc.digitalocean.compute, io.github.cowwoc.digitalocean.database,
+		io.github.cowwoc.digitalocean.kubernetes;
 }

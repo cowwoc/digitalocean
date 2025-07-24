@@ -1,26 +1,18 @@
 package io.github.cowwoc.digitalocean.test;
 
 import io.github.cowwoc.digitalocean.compute.client.ComputeClient;
+import io.github.cowwoc.digitalocean.compute.resource.ComputeDropletType;
 import io.github.cowwoc.digitalocean.compute.resource.Droplet;
 import io.github.cowwoc.digitalocean.compute.resource.DropletImage;
-import io.github.cowwoc.digitalocean.compute.resource.DropletType;
-import io.github.cowwoc.digitalocean.core.util.Configuration;
-import io.github.cowwoc.digitalocean.network.resource.Region;
-import io.github.cowwoc.digitalocean.network.resource.Region.Id;
+import io.github.cowwoc.digitalocean.core.id.RegionId;
 import io.github.cowwoc.digitalocean.test.util.Tests;
+import org.testng.annotations.AfterSuite;
 import org.testng.annotations.Test;
 
 import java.io.IOException;
-import java.nio.file.Path;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.EnumSet;
-import java.util.Set;
 
-public final class ComputeIT
+public final class ComputeIT extends AbstractIT
 {
-	private final Configuration configuration;
-
 	/**
 	 * Creates a new ComputeIT.
 	 *
@@ -28,16 +20,6 @@ public final class ComputeIT
 	 */
 	public ComputeIT() throws IOException
 	{
-		this.configuration = Configuration.fromPath(Path.of("test.properties"));
-	}
-
-	/**
-	 * Sets the access token used for authentication.
-	 */
-	private void login(ComputeClient client)
-	{
-		String accessToken = configuration.getString("ACCESS_TOKEN");
-		client.login(accessToken);
 	}
 
 	@Test
@@ -48,44 +30,13 @@ public final class ComputeIT
 			login(client);
 
 			DropletImage image = getSmallestImage(client);
-			DropletType type = getCheapestTypeCompatibleWithImage(client, image);
-			Region.Id region = getCommonRegion(image.getRegionIds(), type.getRegionIds());
+			ComputeDropletType type = getCheapestTypeCompatibleWithImage(client, image);
+			RegionId regionId = getCommonRegions(image.getRegionIds(), type.getRegionIds()).iterator().next();
 			Droplet droplet = client.createDroplet(Tests.getCallerName(), type.getId(), image.getId()).
-				regionId(region).
+				regionId(regionId).
 				apply();
 			droplet.destroy();
 		}
-	}
-
-	private DropletImage getSmallestImage(ComputeClient client) throws IOException, InterruptedException
-	{
-		return client.getDropletImages().stream().
-			min(Comparator.comparing(DropletImage::getMinDiskSizeInGiB)).
-			orElseThrow();
-	}
-
-	/**
-	 * Returns the cheapest droplet type that is compatible with a DropletImage.
-	 *
-	 * @param client the client configuration
-	 * @param image  the droplet image
-	 * @return the droplet type
-	 */
-	private DropletType getCheapestTypeCompatibleWithImage(ComputeClient client, DropletImage image)
-		throws IOException, InterruptedException
-	{
-		return client.getDropletTypes().stream().filter(candidate ->
-				!Collections.disjoint(candidate.getRegionIds(), image.getRegionIds()) &&
-					candidate.getDiskInGiB() >= image.getMinDiskSizeInGiB()).
-			min(Comparator.comparing(DropletType::getCostPerHour)).
-			orElseThrow();
-	}
-
-	private Region.Id getCommonRegion(Set<Region.Id> first, Set<Region.Id> second)
-	{
-		Set<Id> regions = EnumSet.copyOf(first);
-		regions.retainAll(second);
-		return regions.iterator().next();
 	}
 
 	@Test(expectedExceptions = IllegalArgumentException.class)
@@ -95,42 +46,52 @@ public final class ComputeIT
 		{
 			login(client);
 
-			DropletType type = getCheapestType(client);
+			ComputeDropletType type = getCheapestType(client);
 			DropletImage image = getImageTooLarge(client, type);
-			Region.Id region = getCommonRegion(image.getRegionIds(), type.getRegionIds());
+			RegionId regionId = getCommonRegions(image.getRegionIds(), type.getRegionIds()).iterator().next();
 			Droplet droplet = client.createDroplet(Tests.getCallerName(), type.getId(), image.getId()).
-				regionId(region).
+				regionId(regionId).
 				apply();
 			droplet.destroy();
 		}
 	}
 
-	/**
-	 * Returns the cheapest droplet type.
-	 *
-	 * @param client the client configuration
-	 * @return the droplet type
-	 */
-	private DropletType getCheapestType(ComputeClient client)
-		throws IOException, InterruptedException
+	@Test
+	public void createDuplicateDroplet() throws IOException, InterruptedException
 	{
-		return client.getDropletTypes().stream().
-			min(Comparator.comparing(DropletType::getCostPerHour)).
-			orElseThrow();
+		try (ComputeClient client = ComputeClient.build())
+		{
+			login(client);
+
+			DropletImage image = getSmallestImage(client);
+			ComputeDropletType type = getCheapestTypeCompatibleWithImage(client, image);
+			RegionId regionId = getCommonRegions(image.getRegionIds(), type.getRegionIds()).iterator().next();
+			Droplet droplet1 = client.createDroplet(Tests.getCallerName(), type.getId(), image.getId()).
+				regionId(regionId).
+				apply();
+			try
+			{
+				Droplet droplet2 = client.createDroplet(Tests.getCallerName(), type.getId(), image.getId()).
+					regionId(regionId).
+					apply();
+				droplet2.destroy();
+			}
+			finally
+			{
+				droplet1.destroy();
+			}
+		}
 	}
 
-	/**
-	 * Returns a droplet image that is too large to fit on the specified droplet type.
-	 *
-	 * @param client the client configuration
-	 * @param type   a droplet type
-	 * @return the droplet image
-	 */
-	private DropletImage getImageTooLarge(ComputeClient client, DropletType type)
-		throws IOException, InterruptedException
+	@AfterSuite
+	public void destroyDroplets() throws IOException, InterruptedException
 	{
-		return client.getDropletImages().stream().filter(candidate ->
-				candidate.getMinDiskSizeInGiB() > type.getDiskInGiB()).
-			findAny().orElseThrow();
+		try (ComputeClient client = ComputeClient.build())
+		{
+			login(client);
+
+			for (Droplet droplet : client.getDroplets())
+				droplet.destroy();
+		}
 	}
 }

@@ -1,16 +1,17 @@
 package io.github.cowwoc.digitalocean.database.internal.client;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import io.github.cowwoc.digitalocean.compute.resource.ComputeRegion;
-import io.github.cowwoc.digitalocean.compute.resource.DropletType;
+import io.github.cowwoc.digitalocean.core.id.DatabaseDropletTypeId;
+import io.github.cowwoc.digitalocean.core.id.DatabaseId;
+import io.github.cowwoc.digitalocean.core.id.DatabaseTypeId;
+import io.github.cowwoc.digitalocean.core.id.RegionId;
 import io.github.cowwoc.digitalocean.core.internal.client.AbstractInternalClient;
+import io.github.cowwoc.digitalocean.core.internal.parser.CoreParser;
 import io.github.cowwoc.digitalocean.database.client.DatabaseClient;
 import io.github.cowwoc.digitalocean.database.resource.Database;
-import io.github.cowwoc.digitalocean.database.resource.Database.Id;
 import io.github.cowwoc.digitalocean.database.resource.DatabaseCreator;
+import io.github.cowwoc.digitalocean.database.resource.DatabaseDropletType;
 import io.github.cowwoc.digitalocean.database.resource.DatabaseType;
-import io.github.cowwoc.digitalocean.network.internal.resource.NetworkParser;
-import io.github.cowwoc.digitalocean.network.resource.Region;
 
 import java.io.IOException;
 import java.net.URI;
@@ -27,7 +28,7 @@ public class DefaultDatabaseClient extends AbstractInternalClient
 	implements DatabaseClient
 {
 	private final DatabaseParser databaseParser = new DatabaseParser(this);
-	private final NetworkParser networkParser = new NetworkParser(this);
+	private final CoreParser coreParser = new CoreParser(this);
 
 	/**
 	 * Creates a new DefaultDatabaseClient.
@@ -45,37 +46,45 @@ public class DefaultDatabaseClient extends AbstractInternalClient
 	}
 
 	/**
-	 * @return a {@code NetworkParser}
+	 * @return a {@code CoreParser}
 	 */
-	public NetworkParser getNetworkParser()
+	public CoreParser getCoreParser()
 	{
-		return networkParser;
+		return coreParser;
 	}
 
 	@Override
-	public DatabaseType getDatabaseType(DatabaseType.Id id) throws IOException, InterruptedException
+	public DatabaseType getType(DatabaseTypeId typeId) throws IOException, InterruptedException
 	{
-		JsonNode options = getOptions(id);
+		String typeIdToServer = databaseParser.databaseTypeIdToServer(typeId);
 
-		Set<ComputeRegion.Id> regions = databaseParser.getElements(options, "regions",
-			networkParser::regionIdFromServer);
+		// https://docs.digitalocean.com/reference/api/digitalocean/#tag/Databases/operation/databases_list_options
+		URI uri = REST_SERVER.resolve("v2/databases/options");
+		JsonNode response = getResource(uri, body -> body);
+		JsonNode options = response.get("options").get(typeIdToServer);
+
+		Set<RegionId> regionIds = databaseParser.getElements(options, "regions",
+			coreParser::regionIdFromServer);
 		Set<String> versions = databaseParser.getElements(options, "versions", JsonNode::textValue);
 
 		JsonNode layoutsNode = options.get("layouts");
-		Map<Integer, Set<DropletType.Id>> nodeCountToDropletTypes = new HashMap<>();
+		Map<Integer, Set<DatabaseDropletType>> nodeCountToDropletTypes = new HashMap<>();
 		for (JsonNode layout : layoutsNode)
 		{
 			int nodeCount = databaseParser.getInt(layout, "num_nodes");
 			JsonNode dropletTypesNode = layout.get("sizes");
-			Set<DropletType.Id> dropletTypes = new HashSet<>();
+			Set<DatabaseDropletType> dropletTypes = new HashSet<>();
 			for (JsonNode node : dropletTypesNode)
-				dropletTypes.add(DropletType.id(node.textValue()));
+			{
+				DatabaseDropletTypeId dropletTypeId = DatabaseDropletTypeId.of(node.textValue());
+				dropletTypes.add(new DefaultDatabaseDropletType(dropletTypeId, regionIds));
+			}
 			nodeCountToDropletTypes.put(nodeCount, dropletTypes);
 		}
 
+		JsonNode versionAvailability = response.get("version_availability").get(typeIdToServer);
 		Map<String, Instant> versionToEndOfLife = new HashMap<>();
 		Map<String, Instant> versionToEndOfAvailability = new HashMap<>();
-		JsonNode versionAvailability = options.get("version_availability");
 		for (JsonNode node : versionAvailability)
 		{
 			String version = node.get("version").textValue();
@@ -86,41 +95,18 @@ public class DefaultDatabaseClient extends AbstractInternalClient
 			versionToEndOfAvailability.put(version, endOfAvailability);
 		}
 
-		return new DatabaseType(id, regions, versions, nodeCountToDropletTypes, versionToEndOfLife,
+		return new DatabaseType(typeId, regionIds, versions, nodeCountToDropletTypes, versionToEndOfLife,
 			versionToEndOfAvailability);
 	}
 
-	/**
-	 * Returns the options that are available for this database type.
-	 *
-	 * @param id the database type
-	 * @return the options
-	 * @throws NullPointerException  if {@code id} is null
-	 * @throws IllegalStateException if the client is closed
-	 * @throws IOException           if an I/O error occurs. These errors are typically transient, and retrying
-	 *                               the request may resolve the issue.
-	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
-	 *                               due to shutdown signals.
-	 */
-	private JsonNode getOptions(DatabaseType.Id id) throws IOException, InterruptedException
+	@Override
+	public List<Database> getClusters() throws IOException, InterruptedException
 	{
-		// https://docs.digitalocean.com/reference/api/digitalocean/#tag/Databases/operation/databases_list_options
-		URI uri = REST_SERVER.resolve("v2/databases/options");
-		return getResource(uri, body ->
-		{
-			JsonNode optionsNode = body.get("options");
-			return optionsNode.get(databaseParser.databaseTypeIdToServer(id));
-		});
+		return getClusters(_ -> true);
 	}
 
 	@Override
-	public List<Database> getDatabaseClusters() throws IOException, InterruptedException
-	{
-		return getDatabaseClusters(_ -> true);
-	}
-
-	@Override
-	public List<Database> getDatabaseClusters(Predicate<Database> predicate)
+	public List<Database> getClusters(Predicate<Database> predicate)
 		throws IOException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/digitalocean/#tag/Databases/operation/databases_list_clusters
@@ -138,7 +124,7 @@ public class DefaultDatabaseClient extends AbstractInternalClient
 	}
 
 	@Override
-	public Database getDatabaseCluster(Predicate<Database> predicate) throws IOException, InterruptedException
+	public Database getCluster(Predicate<Database> predicate) throws IOException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/digitalocean/#tag/Databases/operation/databases_list_clusters
 		return getElement(REST_SERVER.resolve("v2/databases"), Map.of(), body ->
@@ -154,7 +140,7 @@ public class DefaultDatabaseClient extends AbstractInternalClient
 	}
 
 	@Override
-	public Database getDatabaseCluster(Id id) throws IOException, InterruptedException
+	public Database getCluster(DatabaseId id) throws IOException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/digitalocean/#tag/Databases/operation/databases_get_cluster
 		return getResource(REST_SERVER.resolve("v2/databases/" + id), body ->
@@ -165,9 +151,16 @@ public class DefaultDatabaseClient extends AbstractInternalClient
 	}
 
 	@Override
-	public DatabaseCreator createDatabaseCluster(String name, DatabaseType databaseType,
-		int numberOfStandbyNodes, DropletType.Id dropletType, Region.Id region)
+	public DatabaseCreator createCluster(String name, DatabaseTypeId typeId, int numberOfNodes,
+		DatabaseDropletTypeId dropletTypeId, RegionId regionId)
 	{
-		return new DefaultDatabaseCreator(this, name, databaseType, numberOfStandbyNodes, dropletType, region);
+		return new DefaultDatabaseCreator(this, name, typeId, numberOfNodes, dropletTypeId, regionId);
+	}
+
+	@Override
+	public void destroyCluster(DatabaseId id) throws IOException, InterruptedException
+	{
+		// https://docs.digitalocean.com/reference/api/digitalocean/#tag/Databases/operation/databases_destroy_cluster
+		destroyResource(REST_SERVER.resolve("v2/databases/" + id));
 	}
 }

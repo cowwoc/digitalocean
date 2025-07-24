@@ -1,13 +1,12 @@
 package io.github.cowwoc.digitalocean.project.internal.parser;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import io.github.cowwoc.digitalocean.core.client.Client;
+import io.github.cowwoc.digitalocean.core.id.ProjectId;
 import io.github.cowwoc.digitalocean.core.internal.parser.AbstractParser;
 import io.github.cowwoc.digitalocean.project.internal.client.DefaultProjectClient;
 import io.github.cowwoc.digitalocean.project.internal.resource.DefaultProject;
 import io.github.cowwoc.digitalocean.project.resource.Project;
 import io.github.cowwoc.digitalocean.project.resource.Project.Environment;
-import io.github.cowwoc.digitalocean.project.resource.Project.Id;
 
 import java.time.Instant;
 import java.util.Locale;
@@ -22,7 +21,7 @@ public final class ProjectParser extends AbstractParser
 	 *
 	 * @param client the client configuration
 	 */
-	public ProjectParser(Client client)
+	public ProjectParser(DefaultProjectClient client)
 	{
 		super(client);
 	}
@@ -44,7 +43,7 @@ public final class ProjectParser extends AbstractParser
 	public Project projectFromServer(JsonNode json)
 	{
 		// https://docs.digitalocean.com/reference/api/digitalocean/#tag/Projects/operation/projects_get
-		Id id = Project.id(json.get("id").textValue());
+		ProjectId id = ProjectId.of(json.get("id").textValue());
 		String ownerUuid = json.get("owner_uuid").textValue();
 		int ownerId = getInt(json, "owner_id");
 		String name = json.get("name").textValue();

@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import io.github.cowwoc.digitalocean.core.client.Client;
 import io.github.cowwoc.digitalocean.core.exception.TooManyRequestsException;
+import io.github.cowwoc.digitalocean.core.id.RegionId;
+import io.github.cowwoc.digitalocean.core.id.VpcId;
 import io.github.cowwoc.digitalocean.core.internal.parser.JsonToObject;
 import io.github.cowwoc.pouch.core.WrappedCheckedException;
 import org.eclipse.jetty.client.ContentResponse;
@@ -156,4 +158,18 @@ public interface InternalClient extends Client
 	 * @return the exception
 	 */
 	TooManyRequestsException getTooManyRequestsException(Response response);
+
+	/**
+	 * Looks up the default VPC of a region.
+	 *
+	 * @param regionId the region
+	 * @return the VPC
+	 * @throws NullPointerException  if {@code regionId} is null
+	 * @throws IllegalStateException if the client is closed
+	 * @throws IOException           if an I/O error occurs. These errors are typically transient, and retrying
+	 *                               the request may resolve the issue.
+	 * @throws InterruptedException  if the thread is interrupted while waiting for a response. This can happen
+	 *                               due to shutdown signals.
+	 */
+	VpcId getDefaultVpcId(RegionId regionId) throws IOException, InterruptedException;
 }

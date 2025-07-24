@@ -1,7 +1,8 @@
 package io.github.cowwoc.digitalocean.network.internal.resource;
 
+import io.github.cowwoc.digitalocean.core.id.RegionId;
+import io.github.cowwoc.digitalocean.core.id.VpcId;
 import io.github.cowwoc.digitalocean.core.internal.util.ToStringBuilder;
-import io.github.cowwoc.digitalocean.network.resource.Region;
 import io.github.cowwoc.digitalocean.network.resource.Vpc;
 
 import java.util.Objects;
@@ -10,46 +11,46 @@ import static io.github.cowwoc.requirements12.java.DefaultJavaValidators.require
 
 public final class DefaultVpc implements Vpc
 {
-	private final Id id;
-	private final Region.Id region;
+	private final VpcId id;
+	private final RegionId regionId;
 
 	/**
 	 * Creates a new VPC.
 	 *
-	 * @param id     the ID of the VPC
-	 * @param region the region that the VPC is in
+	 * @param id       the ID of the VPC
+	 * @param regionId the region that the VPC is in
 	 * @throws NullPointerException if any of the arguments are null
 	 */
-	public DefaultVpc(Id id, Region.Id region)
+	public DefaultVpc(VpcId id, RegionId regionId)
 	{
 		requireThat(id, "id").isNotNull();
-		requireThat(region, "region").isNotNull();
+		requireThat(regionId, "region").isNotNull();
 		this.id = id;
-		this.region = region;
+		this.regionId = regionId;
 	}
 
 	@Override
-	public Id getId()
+	public VpcId getId()
 	{
 		return id;
 	}
 
 	@Override
-	public Region.Id getRegion()
+	public RegionId getRegionId()
 	{
-		return region;
+		return regionId;
 	}
 
 	@Override
 	public int hashCode()
 	{
-		return Objects.hash(id, region);
+		return Objects.hash(id, regionId);
 	}
 
 	@Override
 	public boolean equals(Object o)
 	{
-		return o instanceof Vpc other && other.getId().equals(id) && other.getRegion().equals(region);
+		return o instanceof Vpc other && other.getId().equals(id) && other.getRegionId().equals(regionId);
 	}
 
 	@Override
@@ -57,7 +58,7 @@ public final class DefaultVpc implements Vpc
 	{
 		return new ToStringBuilder(DefaultVpc.class).
 			add("id", id).
-			add("region", region).
+			add("regionId", regionId).
 			toString();
 	}
 }

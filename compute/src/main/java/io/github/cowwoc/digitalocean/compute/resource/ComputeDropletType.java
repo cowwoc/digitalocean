@@ -1,6 +1,7 @@
 package io.github.cowwoc.digitalocean.compute.resource;
 
-import io.github.cowwoc.digitalocean.core.id.StringId;
+import io.github.cowwoc.digitalocean.core.id.ComputeDropletTypeId;
+import io.github.cowwoc.digitalocean.core.id.RegionId;
 
 import java.math.BigDecimal;
 import java.util.Set;
@@ -8,32 +9,25 @@ import java.util.Set;
 import static io.github.cowwoc.requirements12.java.DefaultJavaValidators.requireThat;
 
 /**
- * Droplet types.
+ * Droplet types for compute resources.
+ * <p>
+ * Contracted instances are custom droplet types provisioned under private agreements with DigitalOcean. They
+ * are not publicly available and do not follow standard pricing or region availability rules.
+ * <p>
+ * As such, their {@code regions} field is empty, and the {@code transferInGiB}, {@code costPerHour}, and
+ * {@code costPerMonth} fields are set to zero as placeholders to indicate that standard billing does not
+ * apply.
  *
  * @see <a href="https://www.digitalocean.com/pricing/droplets#basic-droplets">pricing</a>
  */
-public interface DropletType
+public interface ComputeDropletType
 {
-	/**
-	 * Creates a new ID.
-	 *
-	 * @param value the server-side identifier
-	 * @return the type-safe identifier for the resource
-	 * @throws IllegalArgumentException if {@code value} contains whitespace or is empty
-	 */
-	static Id id(String value)
-	{
-		if (value == null)
-			return null;
-		return new Id(value);
-	}
-
 	/**
 	 * Returns the type's ID.
 	 *
 	 * @return the ID
 	 */
-	Id getId();
+	ComputeDropletTypeId getId();
 
 	/**
 	 * Returns the amount of RAM allocated to this type, in MiB.
@@ -59,9 +53,17 @@ public interface DropletType
 	int getDiskInGiB();
 
 	/**
+	 * Determines if the droplet type requires a private agreements with DigitalOcean.
+	 *
+	 * @return {@code true} if the type is contracted
+	 */
+	boolean isContracted();
+
+	/**
 	 * Returns the amount of outgoing network traffic allocated to this type, in GiB.
 	 *
-	 * @return the amount of network traffic
+	 * @return zero for contracted types
+	 * @see #isContracted()
 	 */
 	BigDecimal getTransferInGiB();
 
@@ -69,7 +71,8 @@ public interface DropletType
 	 * Returns the hourly cost of this Droplet type in US dollars. This cost is incurred as long as the Droplet
 	 * is active and has not been destroyed.
 	 *
-	 * @return the cost per hour
+	 * @return zero for contracted types
+	 * @see #isContracted()
 	 */
 	BigDecimal getCostPerHour();
 
@@ -77,16 +80,18 @@ public interface DropletType
 	 * Returns the monthly cost of this Droplet type in US dollars. This cost is incurred as long as the Droplet
 	 * is active and has not been destroyed.
 	 *
-	 * @return the cost per month
+	 * @return zero for contracted types
+	 * @see #isContracted()
 	 */
 	BigDecimal getCostPerMonth();
 
 	/**
 	 * Returns the regions where this type of Droplet may be created.
 	 *
-	 * @return the regions
+	 * @return an empty set for contracted types
+	 * @see #isContracted()
 	 */
-	Set<ComputeRegion.Id> getRegionIds();
+	Set<RegionId> getRegionIds();
 
 	/**
 	 * Determines if Droplets may be created with this type, regardless of the region.
@@ -116,25 +121,6 @@ public interface DropletType
 	 * @return {@code null} if absent
 	 */
 	GpuConfiguration getGpuConfiguration();
-
-	/**
-	 * A type-safe identifier for this type of resource.
-	 * <p>
-	 * This adds type-safety to API methods by ensuring that IDs specific to one class cannot be used in place
-	 * of IDs belonging to another class.
-	 */
-	final class Id extends StringId
-	{
-		/**
-		 * @param value a server-side identifier
-		 * @throws NullPointerException     if {@code value} is null
-		 * @throws IllegalArgumentException if {@code value} contains whitespace or is empty
-		 */
-		private Id(String value)
-		{
-			super(value);
-		}
-	}
 
 	/**
 	 * Describes the disk that is allocated to a droplet.

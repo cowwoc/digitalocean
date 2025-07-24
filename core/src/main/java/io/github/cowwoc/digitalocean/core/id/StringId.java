@@ -2,8 +2,6 @@ package io.github.cowwoc.digitalocean.core.id;
 
 import java.util.Objects;
 
-import static io.github.cowwoc.requirements12.java.DefaultJavaValidators.requireThat;
-
 /**
  * A resource identifier of type {@code String}.
  * <p>
@@ -18,12 +16,9 @@ public abstract class StringId
 	 * Creates a new ID.
 	 *
 	 * @param value the value of the ID
-	 * @throws NullPointerException     if {@code value} is null
-	 * @throws IllegalArgumentException if {@code value} contains whitespace or is empty
 	 */
 	protected StringId(String value)
 	{
-		requireThat(value, "value").doesNotContainWhitespace().isNotEmpty();
 		this.value = value;
 	}
 

@@ -4,16 +4,16 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.github.cowwoc.digitalocean.compute.resource.DropletType;
+import io.github.cowwoc.digitalocean.core.id.ComputeDropletTypeId;
+import io.github.cowwoc.digitalocean.core.id.RegionId;
+import io.github.cowwoc.digitalocean.core.id.VpcId;
+import io.github.cowwoc.digitalocean.core.internal.parser.CoreParser;
 import io.github.cowwoc.digitalocean.core.internal.util.ToStringBuilder;
 import io.github.cowwoc.digitalocean.core.util.CreateResult;
 import io.github.cowwoc.digitalocean.kubernetes.resource.Kubernetes;
 import io.github.cowwoc.digitalocean.kubernetes.resource.Kubernetes.MaintenanceSchedule;
 import io.github.cowwoc.digitalocean.kubernetes.resource.KubernetesCreator;
 import io.github.cowwoc.digitalocean.kubernetes.resource.KubernetesVersion;
-import io.github.cowwoc.digitalocean.network.internal.resource.NetworkParser;
-import io.github.cowwoc.digitalocean.network.resource.Region;
-import io.github.cowwoc.digitalocean.network.resource.Vpc;
 import org.eclipse.jetty.client.ContentResponse;
 import org.eclipse.jetty.client.Request;
 import org.eclipse.jetty.client.Response;
@@ -36,14 +36,14 @@ public final class DefaultKubernetesCreator implements KubernetesCreator
 {
 	private final DefaultKubernetesClient client;
 	private final String name;
-	private final Region.Id region;
+	private final RegionId region;
 	private final KubernetesVersion version;
 	private final Set<String> tags = new LinkedHashSet<>();
 	private final Set<NodePoolBuilder> nodePools;
-	private final NetworkParser networkParser;
+	private final CoreParser coreParser;
 	private String clusterSubnet = "";
 	private String serviceSubnet = "";
-	private Vpc.Id vpc;
+	private VpcId vpc;
 	private MaintenanceSchedule maintenanceSchedule;
 	private boolean autoUpgrade;
 	private boolean surgeUpgrade;
@@ -65,7 +65,7 @@ public final class DefaultKubernetesCreator implements KubernetesCreator
 	 *                                    <li>{@code nodePools} is empty.</li>
 	 *                                  </ul>
 	 */
-	public DefaultKubernetesCreator(DefaultKubernetesClient client, String name, Region.Id region,
+	public DefaultKubernetesCreator(DefaultKubernetesClient client, String name, RegionId region,
 		KubernetesVersion version, Set<NodePoolBuilder> nodePools)
 	{
 		requireThat(client, "client").isNotNull();
@@ -78,7 +78,7 @@ public final class DefaultKubernetesCreator implements KubernetesCreator
 		this.region = region;
 		this.version = version;
 		this.nodePools = new HashSet<>(nodePools);
-		this.networkParser = new NetworkParser(client);
+		this.coreParser = new CoreParser(client);
 	}
 
 	@Override
@@ -88,7 +88,7 @@ public final class DefaultKubernetesCreator implements KubernetesCreator
 	}
 
 	@Override
-	public Region.Id region()
+	public RegionId region()
 	{
 		return region;
 	}
@@ -128,14 +128,14 @@ public final class DefaultKubernetesCreator implements KubernetesCreator
 	}
 
 	@Override
-	public KubernetesCreator vpc(Vpc.Id vpc)
+	public KubernetesCreator vpc(VpcId vpc)
 	{
 		this.vpc = vpc;
 		return this;
 	}
 
 	@Override
-	public Vpc.Id vpc()
+	public VpcId vpc()
 	{
 		return vpc;
 	}
@@ -152,7 +152,6 @@ public final class DefaultKubernetesCreator implements KubernetesCreator
 	public KubernetesCreator tags(Set<String> tags)
 	{
 		requireThat(tags, "tags").isNotNull();
-		this.tags.clear();
 		for (String tag : tags)
 		{
 			requireThat(tag, "tag").withContext(tags, "tags").isStripped().isNotEmpty();
@@ -171,7 +170,6 @@ public final class DefaultKubernetesCreator implements KubernetesCreator
 	public KubernetesCreator nodePools(Set<NodePoolBuilder> nodePools)
 	{
 		requireThat(nodePools, "nodePools").isNotNull();
-		this.nodePools.clear();
 		this.nodePools.addAll(nodePools);
 		return this;
 	}
@@ -236,14 +234,14 @@ public final class DefaultKubernetesCreator implements KubernetesCreator
 	}
 
 	@Override
-	public CreateResult<Kubernetes> create() throws IOException, InterruptedException
+	public CreateResult<Kubernetes> apply() throws IOException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/digitalocean/#tag/Kubernetes/operation/kubernetes_create_cluster
 		JsonMapper jm = client.getJsonMapper();
 		KubernetesParser k8sParser = client.getParser();
 		ObjectNode requestBody = jm.createObjectNode().
 			put("name", name).
-			put("region", networkParser.regionIdToServer(region)).
+			put("region", coreParser.regionIdToServer(region)).
 			put("version", k8sParser.kubernetesVersionToServer(version));
 		ArrayNode nodePoolsNode = requestBody.putArray("node_pools");
 		for (NodePoolBuilder pool : nodePools)
@@ -281,7 +279,7 @@ public final class DefaultKubernetesCreator implements KubernetesCreator
 				String message = json.get("message").textValue();
 				if (message.equals("a cluster with this name already exists"))
 				{
-					Kubernetes conflict = client.getKubernetesCluster(cluster -> cluster.getName().equals(name));
+					Kubernetes conflict = client.getCluster(cluster -> cluster.getName().equals(name));
 					if (conflict != null)
 						yield CreateResult.conflictedWith(conflict);
 				}
@@ -298,7 +296,7 @@ public final class DefaultKubernetesCreator implements KubernetesCreator
 	{
 		clusterSubnet(existingCluster.getClusterSubnet());
 		serviceSubnet(existingCluster.getServiceSubnet());
-		vpc(existingCluster.getVpc());
+		vpc(existingCluster.getVpcId());
 		nodePools(existingCluster.getNodePools().stream().map(Kubernetes.NodePool::forCreator).
 			collect(Collectors.toSet()));
 		// Add auto-generated tags
@@ -328,7 +326,7 @@ public final class DefaultKubernetesCreator implements KubernetesCreator
 	public static final class DefaultNodePoolBuilder implements NodePoolBuilder
 	{
 		private final String name;
-		private final DropletType.Id dropletType;
+		private final ComputeDropletTypeId dropletType;
 		private final int initialNumberOfNodes;
 		private final Set<String> tags = new LinkedHashSet<>();
 		private final Set<String> labels = new LinkedHashSet<>();
@@ -351,7 +349,7 @@ public final class DefaultKubernetesCreator implements KubernetesCreator
 		 *                                    <li>{@code initialNumberOfNodes} is negative or zero.</li>
 		 *                                  </ul>
 		 */
-		public DefaultNodePoolBuilder(String name, DropletType.Id dropletType, int initialNumberOfNodes)
+		public DefaultNodePoolBuilder(String name, ComputeDropletTypeId dropletType, int initialNumberOfNodes)
 		{
 			requireThat(name, "name").isStripped().isNotEmpty();
 			requireThat(dropletType, "dropletType").isNotNull();
@@ -363,7 +361,7 @@ public final class DefaultKubernetesCreator implements KubernetesCreator
 		}
 
 		@Override
-		public DropletType.Id dropletType()
+		public ComputeDropletTypeId dropletType()
 		{
 			return dropletType;
 		}
@@ -392,7 +390,6 @@ public final class DefaultKubernetesCreator implements KubernetesCreator
 		public NodePoolBuilder tags(Collection<String> tags)
 		{
 			requireThat(tags, "tags").isNotNull().doesNotContain(null);
-			this.tags.clear();
 			for (String tag : tags)
 			{
 				requireThat(tag, "tag").withContext(tags, "tags").isStripped().isNotEmpty();
@@ -419,7 +416,6 @@ public final class DefaultKubernetesCreator implements KubernetesCreator
 		public NodePoolBuilder labels(Collection<String> labels)
 		{
 			requireThat(labels, "labels").isNotNull().doesNotContain(null);
-			this.labels.clear();
 			for (String label : labels)
 			{
 				requireThat(label, "label").withContext(labels, "labels").isStripped().isNotEmpty();
@@ -446,7 +442,6 @@ public final class DefaultKubernetesCreator implements KubernetesCreator
 		public NodePoolBuilder taints(Collection<String> taints)
 		{
 			requireThat(taints, "taints").isNotNull().doesNotContain(null);
-			this.taints.clear();
 			for (String taint : taints)
 			{
 				requireThat(taint, "taint").withContext(taints, "taints").isStripped().isNotEmpty();

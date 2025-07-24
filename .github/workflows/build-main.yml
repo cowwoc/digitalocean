@@ -1,3 +1,5 @@
+# Need separate workflows for "main" and PR builds because README.md contains a badge showing the status of
+# the main branch.
 name: Build
 on:
   push:

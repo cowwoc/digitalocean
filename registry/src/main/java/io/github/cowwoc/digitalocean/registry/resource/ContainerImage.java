@@ -2,7 +2,7 @@ package io.github.cowwoc.digitalocean.registry.resource;
 
 import io.github.cowwoc.digitalocean.core.exception.AccessDeniedException;
 import io.github.cowwoc.digitalocean.core.exception.TooManyRequestsException;
-import io.github.cowwoc.digitalocean.core.id.StringId;
+import io.github.cowwoc.digitalocean.core.id.ContainerImageId;
 
 import java.io.IOException;
 import java.util.Set;
@@ -17,20 +17,6 @@ import static io.github.cowwoc.requirements12.java.DefaultJavaValidators.require
 public interface ContainerImage
 {
 	/**
-	 * Creates a new ID.
-	 *
-	 * @param value the server-side identifier
-	 * @return the type-safe identifier for the resource
-	 * @throws IllegalArgumentException if {@code value} contains whitespace or is empty
-	 */
-	static Id id(String value)
-	{
-		if (value == null)
-			return null;
-		return new Id(value);
-	}
-
-	/**
 	 * Returns the repository that the image is in.
 	 *
 	 * @return the repository
@@ -42,7 +28,7 @@ public interface ContainerImage
 	 *
 	 * @return the ID
 	 */
-	Id getId();
+	ContainerImageId getId();
 
 	/**
 	 * Returns the image's tags.
@@ -73,7 +59,7 @@ public interface ContainerImage
 	ContainerImage reload() throws IOException, InterruptedException;
 
 	/**
-	 * Removes an image and all its tags.
+	 * Removes an image and all its tags. If the image does not exist, this method does nothing.
 	 *
 	 * @throws IllegalStateException    if the client is closed
 	 * @throws AccessDeniedException    if the client does not have sufficient privileges to execute this
@@ -88,27 +74,11 @@ public interface ContainerImage
 	void destroy() throws IOException, InterruptedException;
 
 	/**
-	 * An image ID. An ID uniquely identifies the image within a repository.
-	 */
-	final class Id extends StringId
-	{
-		/**
-		 * @param value a server-side identifier
-		 * @throws NullPointerException     if {@code value} is null
-		 * @throws IllegalArgumentException if {@code value} contains whitespace or is empty
-		 */
-		private Id(String value)
-		{
-			super(value);
-		}
-	}
-
-	/**
 	 * A layer of the image.
 	 *
 	 * @param id the image that is referenced by the layer
 	 */
-	record Layer(Id id)
+	record Layer(ContainerImageId id)
 	{
 		/**
 		 * Creates a new Layer.

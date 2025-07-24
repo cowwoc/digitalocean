@@ -1,11 +1,11 @@
 package io.github.cowwoc.digitalocean.project.internal.client;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import io.github.cowwoc.digitalocean.core.id.ProjectId;
 import io.github.cowwoc.digitalocean.core.internal.client.AbstractInternalClient;
 import io.github.cowwoc.digitalocean.project.client.ProjectClient;
 import io.github.cowwoc.digitalocean.project.internal.parser.ProjectParser;
 import io.github.cowwoc.digitalocean.project.resource.Project;
-import io.github.cowwoc.digitalocean.project.resource.Project.Id;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -59,7 +59,7 @@ public class DefaultProjectClient extends AbstractInternalClient
 	}
 
 	@Override
-	public Project getProject(Id id) throws IOException, InterruptedException
+	public Project getProject(ProjectId id) throws IOException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/digitalocean/#tag/Projects/operation/projects_get
 		return getResource(REST_SERVER.resolve("v2/projects/" + id.getValue()), body ->

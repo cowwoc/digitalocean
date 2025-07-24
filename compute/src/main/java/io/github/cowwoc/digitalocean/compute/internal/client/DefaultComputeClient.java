@@ -3,21 +3,23 @@ package io.github.cowwoc.digitalocean.compute.internal.client;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.cowwoc.digitalocean.compute.client.ComputeClient;
-import io.github.cowwoc.digitalocean.compute.internal.resource.ComputeParser;
+import io.github.cowwoc.digitalocean.compute.internal.parser.ComputeParser;
 import io.github.cowwoc.digitalocean.compute.internal.resource.DefaultDropletCreator;
 import io.github.cowwoc.digitalocean.compute.internal.resource.DefaultSshPublicKey;
 import io.github.cowwoc.digitalocean.compute.internal.util.SshKeys;
-import io.github.cowwoc.digitalocean.compute.resource.ComputeRegion;
+import io.github.cowwoc.digitalocean.compute.resource.ComputeDropletType;
 import io.github.cowwoc.digitalocean.compute.resource.Droplet;
 import io.github.cowwoc.digitalocean.compute.resource.DropletCreator;
 import io.github.cowwoc.digitalocean.compute.resource.DropletImage;
-import io.github.cowwoc.digitalocean.compute.resource.DropletType;
 import io.github.cowwoc.digitalocean.compute.resource.SshPublicKey;
+import io.github.cowwoc.digitalocean.core.id.ComputeDropletTypeId;
+import io.github.cowwoc.digitalocean.core.id.DropletId;
+import io.github.cowwoc.digitalocean.core.id.DropletImageId;
+import io.github.cowwoc.digitalocean.core.id.RegionId;
+import io.github.cowwoc.digitalocean.core.id.SshPublicKeyId;
 import io.github.cowwoc.digitalocean.core.internal.client.AbstractInternalClient;
-import io.github.cowwoc.digitalocean.network.internal.resource.NetworkParser;
+import io.github.cowwoc.digitalocean.core.internal.parser.CoreParser;
 import io.github.cowwoc.digitalocean.network.resource.Region;
-import io.github.cowwoc.digitalocean.network.resource.Region.Id;
-import io.github.cowwoc.digitalocean.network.resource.Vpc;
 import org.eclipse.jetty.client.ContentResponse;
 import org.eclipse.jetty.client.Request;
 import org.eclipse.jetty.client.Response;
@@ -46,9 +48,19 @@ public class DefaultComputeClient extends AbstractInternalClient
 {
 	private static final String DROPLET_METADATA = "http://169.254.169.254";
 	@SuppressWarnings("this-escape")
-	private final ComputeParser computeParser = new ComputeParser(this);
+	private final CoreParser coreParser = new CoreParser(this);
 	@SuppressWarnings("this-escape")
-	private final NetworkParser networkParser = new NetworkParser(this);
+	private final ComputeParser computeParser = new ComputeParser(this);
+
+	/**
+	 * Returns a {@code CoreParser}.
+	 *
+	 * @return the parser
+	 */
+	public CoreParser getCoreParser()
+	{
+		return coreParser;
+	}
 
 	/**
 	 * Returns a {@code ComputeParser}.
@@ -60,61 +72,34 @@ public class DefaultComputeClient extends AbstractInternalClient
 		return computeParser;
 	}
 
-	/**
-	 * Returns a {@code NetworkParser}.
-	 *
-	 * @return the parser
-	 */
-	public NetworkParser getNetworkParser()
+	@Override
+	public List<ComputeDropletType> getDropletTypes() throws IOException, InterruptedException
 	{
-		return networkParser;
+		return getDropletTypes(true);
 	}
 
 	@Override
-	public Vpc getDefaultVpc(Region.Id regionId) throws IOException, InterruptedException
-	{
-		requireThat(regionId, "regionId").isNotNull();
-
-		// https://docs.digitalocean.com/reference/api/digitalocean/#tag/VPCs/operation/vpcs_list
-		return getElement(REST_SERVER.resolve("v2/vpcs"), Map.of(), body ->
-		{
-			for (JsonNode vpc : body.get("vpcs"))
-			{
-				boolean isDefault = computeParser.getBoolean(vpc, "default");
-				if (!isDefault)
-					continue;
-				Region.Id actualRegion = networkParser.regionIdFromServer(vpc.get("region"));
-				if (actualRegion.equals(regionId))
-					return networkParser.vpcFromServer(vpc);
-			}
-			return null;
-		});
-	}
-
-	@Override
-	public List<ComputeRegion> getRegions() throws IOException, InterruptedException
+	public List<Region> getRegions() throws IOException, InterruptedException
 	{
 		return getRegions(true);
 	}
 
 	@Override
-	public List<ComputeRegion> getRegions(boolean canCreateDroplets) throws IOException, InterruptedException
+	public List<Region> getRegions(boolean canCreateDroplets) throws IOException, InterruptedException
 	{
 		return getRegions(region -> !canCreateDroplets || region.canCreateDroplets());
 	}
 
 	@Override
-	public List<ComputeRegion> getRegions(Predicate<ComputeRegion> predicate)
-		throws IOException, InterruptedException
+	public List<Region> getRegions(Predicate<Region> predicate) throws IOException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/digitalocean/#tag/Regions/operation/regions_list
 		return getElements(REST_SERVER.resolve("v2/regions"), Map.of(), body ->
 		{
-			List<ComputeRegion> regions = new ArrayList<>();
+			List<Region> regions = new ArrayList<>();
 			for (JsonNode region : body.get("regions"))
 			{
-				ComputeRegion.Id candidateId = networkParser.regionIdFromServer(region);
-				ComputeRegion candidate = getRegion(candidateId);
+				Region candidate = computeParser.regionFromServer(region);
 				if (predicate.test(candidate))
 					regions.add(candidate);
 			}
@@ -123,15 +108,14 @@ public class DefaultComputeClient extends AbstractInternalClient
 	}
 
 	@Override
-	public ComputeRegion getRegion(
-		Predicate<ComputeRegion> predicate) throws IOException, InterruptedException
+	public Region getRegion(Predicate<Region> predicate) throws IOException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/digitalocean/#tag/Regions/operation/regions_list
 		return getElement(REST_SERVER.resolve("v2/regions"), Map.of(), body ->
 		{
 			for (JsonNode regionNode : body.get("regions"))
 			{
-				ComputeRegion candidate = computeParser.regionFromServer(regionNode);
+				Region candidate = computeParser.regionFromServer(regionNode);
 				if (predicate.test(candidate))
 					return candidate;
 			}
@@ -140,27 +124,22 @@ public class DefaultComputeClient extends AbstractInternalClient
 	}
 
 	@Override
-	public ComputeRegion getRegion(Id id) throws IOException, InterruptedException
+	public Region getRegion(RegionId id) throws IOException, InterruptedException
 	{
 		return getRegion(region -> region.getId().equals(id));
 	}
 
 	@Override
-	public List<DropletType> getDropletTypes() throws IOException, InterruptedException
+	public List<ComputeDropletType> getDropletTypes(boolean canCreateDroplets)
+		throws IOException, InterruptedException
 	{
-		return getDropletTypes(true);
-	}
-
-	@Override
-	public List<DropletType> getDropletTypes(boolean canCreateDroplets) throws IOException, InterruptedException
-	{
-		// https://docs.digitalocean.com/reference/api/digitalocean/#tag/Droplets/operation/sizes_list
+		// https://docs.digitalocean.com/reference/api/digitalocean/#tag/Sizes/operation/sizes_list
 		return getElements(REST_SERVER.resolve("v2/sizes"), Map.of(), body ->
 		{
-			List<DropletType> types = new ArrayList<>();
+			List<ComputeDropletType> types = new ArrayList<>();
 			for (JsonNode typeNode : body.get("sizes"))
 			{
-				DropletType candidate = computeParser.dropletTypeFromServer(typeNode);
+				ComputeDropletType candidate = computeParser.dropletTypeFromServer(typeNode);
 				if (candidate.isAvailable() || !canCreateDroplets)
 					types.add(candidate);
 			}
@@ -169,14 +148,15 @@ public class DefaultComputeClient extends AbstractInternalClient
 	}
 
 	@Override
-	public DropletType getDropletType(Predicate<DropletType> predicate) throws IOException, InterruptedException
+	public ComputeDropletType getDropletType(Predicate<ComputeDropletType> predicate)
+		throws IOException, InterruptedException
 	{
-		// https://docs.digitalocean.com/reference/api/digitalocean/#tag/Droplets/operation/sizes_list
+		// https://docs.digitalocean.com/reference/api/digitalocean/#tag/Sizes/operation/sizes_list
 		return getElement(REST_SERVER.resolve("v2/sizes"), Map.of(), body ->
 		{
 			for (JsonNode typeNode : body.get("sizes"))
 			{
-				DropletType candidate = computeParser.dropletTypeFromServer(typeNode);
+				ComputeDropletType candidate = computeParser.dropletTypeFromServer(typeNode);
 				if (predicate.test(candidate))
 					return candidate;
 			}
@@ -185,7 +165,7 @@ public class DefaultComputeClient extends AbstractInternalClient
 	}
 
 	@Override
-	public Droplet getDroplet(Droplet.Id id) throws IOException, InterruptedException
+	public Droplet getDroplet(DropletId id) throws IOException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/digitalocean/#tag/Droplets/operation/droplets_get
 		return getResource(REST_SERVER.resolve("v2/droplets/" + id.getValue()), body ->
@@ -235,7 +215,7 @@ public class DefaultComputeClient extends AbstractInternalClient
 	}
 
 	@Override
-	public DropletImage getDropletImage(DropletImage.Id id)
+	public DropletImage getDropletImage(DropletImageId id)
 		throws IOException, InterruptedException
 	{
 		return getDropletImageImpl(String.valueOf(id.getValue()));
@@ -299,7 +279,7 @@ public class DefaultComputeClient extends AbstractInternalClient
 	}
 
 	@Override
-	public DropletCreator createDroplet(String name, DropletType.Id typeId, DropletImage.Id imageId)
+	public DropletCreator createDroplet(String name, ComputeDropletTypeId typeId, DropletImageId imageId)
 	{
 		return new DefaultDropletCreator(this, name, typeId, imageId);
 	}
@@ -346,7 +326,7 @@ public class DefaultComputeClient extends AbstractInternalClient
 	}
 
 	@Override
-	public SshPublicKey getSshPublicKey(SshPublicKey.Id id) throws IOException, InterruptedException
+	public SshPublicKey getSshPublicKey(SshPublicKeyId id) throws IOException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/digitalocean/#tag/SSH-Keys/operation/sshKeys_get
 		return getResource(REST_SERVER.resolve("v2/account/keys/" + id.getValue()), body ->
@@ -399,13 +379,9 @@ public class DefaultComputeClient extends AbstractInternalClient
 		Request request = createRequest(REST_SERVER.resolve("v2/account/keys"), requestBody).
 			method(POST);
 		Response serverResponse = send(request);
-		switch (serverResponse.getStatus())
+		if (serverResponse.getStatus() != CREATED_201)
 		{
-			case CREATED_201 ->
-			{
-				// success
-			}
-			default -> throw new AssertionError("Unexpected response: " + toString(serverResponse) + "\n" +
+			throw new AssertionError("Unexpected response: " + toString(serverResponse) + "\n" +
 				"Request: " + toString(request));
 		}
 		ContentResponse contentResponse = (ContentResponse) serverResponse;
@@ -419,7 +395,7 @@ public class DefaultComputeClient extends AbstractInternalClient
 			throw new AssertionError(message);
 		}
 		JsonNode sshKeyNode = body.get("ssh_key");
-		SshPublicKey.Id id = SshPublicKey.id(computeParser.getInt(sshKeyNode, "id"));
+		SshPublicKeyId id = SshPublicKeyId.of(computeParser.getInt(sshKeyNode, "id"));
 
 		String actualName = sshKeyNode.get("name").textValue();
 		assert that(actualName, "actualName").isEqualTo(name, "name").elseThrow();
@@ -460,13 +436,13 @@ public class DefaultComputeClient extends AbstractInternalClient
 	}
 
 	@Override
-	public Integer getCurrentDropletId() throws IOException, InterruptedException
+	public DropletId getCurrentDropletId() throws IOException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/metadata-api/#operation/getDropletId
 		String value = getMetadataValue(URI.create(DROPLET_METADATA + "/metadata/v1/id"));
 		if (value == null)
 			return null;
-		return Integer.parseInt(value);
+		return DropletId.of(Integer.parseInt(value));
 	}
 
 	@Override
@@ -477,10 +453,13 @@ public class DefaultComputeClient extends AbstractInternalClient
 	}
 
 	@Override
-	public String getCurrentDropletRegion() throws IOException, InterruptedException
+	public RegionId getCurrentDropletRegionId() throws IOException, InterruptedException
 	{
 		// https://docs.digitalocean.com/reference/api/metadata-api/#operation/getRegion
-		return getMetadataValue(URI.create(DROPLET_METADATA + "/metadata/v1/region"));
+		String regionIdAsString = getMetadataValue(URI.create(DROPLET_METADATA + "/metadata/v1/region"));
+		if (regionIdAsString == null)
+			return null;
+		return coreParser.regionIdFromServer(regionIdAsString);
 	}
 
 	/**

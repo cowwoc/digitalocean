@@ -4,16 +4,17 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.github.cowwoc.digitalocean.compute.client.ComputeClient;
 import io.github.cowwoc.digitalocean.core.exception.ResourceNotFoundException;
+import io.github.cowwoc.digitalocean.core.id.KubernetesId;
+import io.github.cowwoc.digitalocean.core.id.RegionId;
+import io.github.cowwoc.digitalocean.core.id.VpcId;
 import io.github.cowwoc.digitalocean.core.internal.util.RetryDelay;
 import io.github.cowwoc.digitalocean.core.internal.util.TimeLimit;
 import io.github.cowwoc.digitalocean.core.internal.util.ToStringBuilder;
 import io.github.cowwoc.digitalocean.kubernetes.resource.Kubernetes;
 import io.github.cowwoc.digitalocean.kubernetes.resource.KubernetesCreator;
 import io.github.cowwoc.digitalocean.kubernetes.resource.KubernetesVersion;
-import io.github.cowwoc.digitalocean.network.resource.Region;
-import io.github.cowwoc.digitalocean.network.resource.Vpc;
+import io.github.cowwoc.digitalocean.network.client.NetworkClient;
 import org.eclipse.jetty.client.ContentResponse;
 import org.eclipse.jetty.client.Request;
 import org.eclipse.jetty.client.Response;
@@ -43,13 +44,13 @@ import static org.eclipse.jetty.http.HttpStatus.OK_200;
 public final class DefaultKubernetes implements Kubernetes
 {
 	private final DefaultKubernetesClient client;
-	private final Id id;
+	private final KubernetesId id;
 	private final String name;
-	private final Region.Id region;
+	private final RegionId regionId;
 	private final KubernetesVersion version;
 	private final String clusterSubnet;
 	private final String serviceSubnet;
-	private final Vpc.Id vpc;
+	private final VpcId vpcId;
 	private final String ipv4;
 	private final String endpoint;
 	private final Set<String> tags;
@@ -70,13 +71,13 @@ public final class DefaultKubernetes implements Kubernetes
 	 * @param client              the client configuration
 	 * @param id                  the ID of the cluster
 	 * @param name                the name of the cluster
-	 * @param region              the region that the droplet is deployed in
+	 * @param regionId            the region that the droplet is deployed in
 	 * @param version             the software version of Kubernetes
 	 * @param clusterSubnet       the range of IP addresses for the overlay network of the Kubernetes cluster,
 	 *                            in CIDR notation
 	 * @param serviceSubnet       the range of IP addresses for the services running in the Kubernetes cluster,
 	 *                            in CIDR notation
-	 * @param vpc                 the VPC that the cluster is deployed in
+	 * @param vpcId               the VPC that the cluster is deployed in
 	 * @param ipv4                (optional) the public IPv4 address of the Kubernetes control plane or an empty
 	 *                            string if not set. This value will not be set if high availability is
 	 *                            configured on the cluster.
@@ -100,10 +101,10 @@ public final class DefaultKubernetes implements Kubernetes
 	 *                                    <li>any of the arguments contain leading or trailing whitespace</li>
 	 *                                    <li>any of the mandatory arguments are empty</li>
 	 *                                  </ul>
-	 * @see ComputeClient#getDefaultVpc(Region.Id)
+	 * @see NetworkClient#getDefaultVpcId(RegionId)
 	 */
-	public DefaultKubernetes(DefaultKubernetesClient client, Id id, String name, Region.Id region,
-		KubernetesVersion version, String clusterSubnet, String serviceSubnet, Vpc.Id vpc, String ipv4,
+	public DefaultKubernetes(DefaultKubernetesClient client, KubernetesId id, String name, RegionId regionId,
+		KubernetesVersion version, String clusterSubnet, String serviceSubnet, VpcId vpcId, String ipv4,
 		String endpoint, Set<String> tags, Set<NodePool> nodePools, MaintenanceSchedule maintenanceSchedule,
 		boolean autoUpgrade, Status status, boolean surgeUpgrade, boolean highAvailability,
 		boolean canAccessRegistry, Instant createdAt, Instant updatedAt)
@@ -111,11 +112,11 @@ public final class DefaultKubernetes implements Kubernetes
 		requireThat(client, "client").isNotNull();
 		requireThat(id, "id").isNotNull();
 		requireThat(name, "name").isStripped().isNotEmpty();
-		requireThat(region, "region").isNotNull();
+		requireThat(regionId, "region").isNotNull();
 		requireThat(version, "version").isNotNull();
 		requireThat(clusterSubnet, "clusterSubnet").isNotNull();
 		requireThat(serviceSubnet, "serviceSubnet").isNotNull();
-		requireThat(vpc, "vpc").isNotNull();
+		requireThat(vpcId, "vpc").isNotNull();
 		requireThat(ipv4, "ipv4").isNotNull();
 		requireThat(endpoint, "endpoint").isNotNull();
 		requireThat(tags, "tags").isNotNull();
@@ -127,11 +128,11 @@ public final class DefaultKubernetes implements Kubernetes
 		this.client = client;
 		this.id = id;
 		this.name = name;
-		this.region = region;
+		this.regionId = regionId;
 		this.version = version;
 		this.clusterSubnet = clusterSubnet;
 		this.serviceSubnet = serviceSubnet;
-		this.vpc = vpc;
+		this.vpcId = vpcId;
 		this.ipv4 = ipv4;
 		this.endpoint = endpoint;
 		this.tags = Set.copyOf(tags);
@@ -147,7 +148,7 @@ public final class DefaultKubernetes implements Kubernetes
 	}
 
 	@Override
-	public Id getId()
+	public KubernetesId getId()
 	{
 		return id;
 	}
@@ -159,9 +160,9 @@ public final class DefaultKubernetes implements Kubernetes
 	}
 
 	@Override
-	public Region.Id getRegion()
+	public RegionId getRegionId()
 	{
-		return region;
+		return regionId;
 	}
 
 	@Override
@@ -183,9 +184,9 @@ public final class DefaultKubernetes implements Kubernetes
 	}
 
 	@Override
-	public Vpc.Id getVpc()
+	public VpcId getVpcId()
 	{
-		return vpc;
+		return vpcId;
 	}
 
 	@Override
@@ -263,9 +264,9 @@ public final class DefaultKubernetes implements Kubernetes
 	@Override
 	public boolean matches(KubernetesCreator state)
 	{
-		return state.name().equals(name) && state.region().equals(region) && state.version().equals(version) &&
+		return state.name().equals(name) && state.region().equals(regionId) && state.version().equals(version) &&
 			state.clusterSubnet().equals(clusterSubnet) && state.serviceSubnet().equals(serviceSubnet) &&
-			Objects.equals(state.vpc(), vpc) && state.tags().equals(tags) &&
+			Objects.equals(state.vpc(), vpcId) && state.tags().equals(tags) &&
 			state.nodePools().equals(nodePools.stream().map(NodePool::forCreator).collect(Collectors.toSet())) &&
 			state.maintenanceSchedule().equals(maintenanceSchedule) && state.autoUpgrade() == autoUpgrade &&
 			state.surgeUpgrade() == surgeUpgrade && state.highAvailability() == highAvailability;
@@ -275,11 +276,11 @@ public final class DefaultKubernetes implements Kubernetes
 	public void update(KubernetesCreator target)
 		throws IOException, InterruptedException, ResourceNotFoundException
 	{
-		requireThat(target.region(), "target.region").isEqualTo(region);
+		requireThat(target.region(), "target.region").isEqualTo(regionId);
 		requireThat(target.version(), "target.version").isEqualTo(version);
 		requireThat(target.clusterSubnet(), "target.clusterSubnet").isEqualTo(clusterSubnet);
 		requireThat(target.serviceSubnet(), "target.serviceSubnet").isEqualTo(serviceSubnet);
-		requireThat(target.vpc(), "target.vpc").isEqualTo(vpc);
+		requireThat(target.vpc(), "target.vpc").isEqualTo(vpcId);
 		requireThat(target.nodePools(), "target.nodePools").isEqualTo(nodePools.stream().
 			map(NodePool::forCreator).collect(Collectors.toSet()));
 		if (matches(target))
@@ -432,11 +433,11 @@ public final class DefaultKubernetes implements Kubernetes
 		return new ToStringBuilder(DefaultKubernetes.class).
 			add("id", id).
 			add("name", name).
-			add("region", region).
+			add("regionId", regionId).
 			add("version", version).
 			add("clusterSubnet", clusterSubnet).
 			add("serviceSubnet", serviceSubnet).
-			add("vpc", vpc).
+			add("vpcId", vpcId).
 			add("ipv4", ipv4).
 			add("endpoint", endpoint).
 			add("tags", tags).
